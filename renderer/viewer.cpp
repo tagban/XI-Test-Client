@@ -6390,7 +6390,18 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
         };
         idleClip = find("idl0");
         restClip = find("res0");
-        sitClip = find("si1");
+
+        // si10, not si1. A clip name is four characters - a three-character
+        // action and a half, 0 for the root and legs and 1 for everything
+        // above the waist - so sitting still is action si1, half 0. Asking for
+        // "si1" matches nothing at all, which is why /sit said you had sat
+        // down and left you standing. upperFor turns the trailing 0 into a 1,
+        // so si11 comes along on its own.
+        sitClip = find("si10");
+        if (character && !character->animations.empty() && !sitClip)
+        {
+            std::printf("no sitting clip (si10) on this body; /sit will do nothing\n");
+        }
         walkClip = find("wlk0");
         runClip = find("run0");
         jumpClip = find("jmp0");
