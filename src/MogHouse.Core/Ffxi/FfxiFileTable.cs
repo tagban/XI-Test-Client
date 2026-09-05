@@ -110,7 +110,81 @@ public sealed class FfxiFileTable
 
         // ROM 1 lives in a folder called plain "ROM"; the rest carry a number.
         string folder = rom == 1 ? "ROM" : $"ROM{rom}";
-        return System.IO.Path.Combine(_root, folder, (packed >> 7).ToString(), $"{packed & 0x7F}.DAT");
+        string relative = System.IO.Path.Combine(folder, (packed >> 7).ToString(), $"{packed & 0x7F}.DAT");
+
+        // A replacement, if somebody has put one there.
+        if (ReplacementRoot is { Length: > 0 } over)
+        {
+            string candidate = System.IO.Path.Combine(over, relative);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return System.IO.Path.Combine(_root, relative);
+    }
+
+    private static string? _replacementRoot;
+    private static string? _replacementRootFor;
+
+    /// <summary>
+    /// Where a modder's replacement DATs live, or null.
+    ///
+    /// <para>
+    /// A folder mirroring the install's own layout - <c>ROM/1/31.DAT</c>,
+    /// <c>ROM9/0/7.DAT</c> - whose files are used instead of the install's.
+    /// The retail files are never written to, which is the whole point: a mod
+    /// is something you can delete.
+    /// </para>
+    ///
+    /// <para>
+    /// The layout is the install's rather than our own file ids on purpose. It
+    /// is what the existing tools distribute, so a mod written for any of them
+    /// drops in unchanged, and it is what the wiki's paths already look like.
+    /// </para>
+    ///
+    /// <para>
+    /// <c>MOGHOUSE_DAT_REPLACEMENTS</c> names it; otherwise it is "DAT
+    /// Replacements" beside the settings, which is a folder the player owns
+    /// rather than one inside the game they do not. Setting the variable also
+    /// hands it to the renderer, which reads the same name.
+    /// </para>
+    /// </summary>
+    public static string? ReplacementRoot
+    {
+        get
+        {
+            // Cached against the value it was read from rather than by a
+            // once-only flag. The answer cannot change while the client runs,
+            // but a test that points this somewhere else has to be able to say
+            // so - and a flag makes the first test to run decide for all of
+            // them.
+            string? named = Environment.GetEnvironmentVariable("MOGHOUSE_DAT_REPLACEMENTS");
+            if (_replacementRootFor == named)
+            {
+                return _replacementRoot;
+            }
+
+            _replacementRootFor = named;
+            string root = named is { Length: > 0 }
+                ? named
+                : System.IO.Path.Combine(FfxiServerProfileStore.DefaultConfigDirectory(), "DAT Replacements");
+
+            if (!Directory.Exists(root))
+            {
+                _replacementRoot = null;
+                return null;
+            }
+
+            // Handed to the renderer through the environment, so the two sides
+            // cannot disagree about where mods live. Recorded as what we read,
+            // so setting it does not invalidate the cache we just filled.
+            Environment.SetEnvironmentVariable("MOGHOUSE_DAT_REPLACEMENTS", root);
+            _replacementRootFor = root;
+            _replacementRoot = root;
+            return root;
+        }
     }
 
     /// <summary>The map data for a zone, or null if it is not installed.</summary>

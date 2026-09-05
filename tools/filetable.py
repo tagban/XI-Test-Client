@@ -24,6 +24,8 @@ that resolved: shift 7 resolves 82,912 of 82,912 present ids, shift 8 manages
 50.3% and shift 9 27.6%.
 """
 
+import os
+import pathlib
 import struct
 from pathlib import Path
 
@@ -59,13 +61,27 @@ class FileTable:
         return len(self._vtable)
 
     def path(self, file_id):
-        """The path for a file id, or None if it is not installed."""
+        """The path for a file id, or None if it is not installed.
+
+        A folder named by MOGHOUSE_DAT_REPLACEMENTS is searched first. It
+        mirrors the install's own layout - ROM/1/31.DAT - so a file present
+        there is used instead of the install's, and the retail files are never
+        written to. The renderer and the client read the same variable.
+        """
         rom = self._vtable[file_id]
         if rom == 0:
             return None
         packed = struct.unpack_from("<H", self._ftable, file_id * 2)[0]
         folder = "ROM" if rom == 1 else f"ROM{rom}"
-        return self.root / folder / str(packed >> 7) / f"{packed & 0x7F}.DAT"
+        relative = os.path.join(folder, str(packed >> 7), f"{packed & 0x7F}.DAT")
+
+        over = os.environ.get("MOGHOUSE_DAT_REPLACEMENTS")
+        if over:
+            candidate = pathlib.Path(over) / relative
+            if candidate.exists():
+                return candidate
+
+        return self.root / relative
 
     def present(self):
         """Every installed file id, in order."""

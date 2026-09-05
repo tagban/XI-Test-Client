@@ -93,7 +93,47 @@ std::optional<std::filesystem::path> FileTable::path(size_t fileId) const
 
     // ROM 1 lives in a folder called plain "ROM"; the rest carry their number.
     const std::string folder = rom == 1 ? "ROM" : "ROM" + std::to_string(rom);
-    return root_ / folder / std::to_string(packed >> 7) / (std::to_string(packed & 0x7F) + ".DAT");
+    const std::filesystem::path relative =
+        std::filesystem::path{folder} / std::to_string(packed >> 7) / (std::to_string(packed & 0x7F) + ".DAT");
+
+    // A replacement, if somebody has put one there. See replacementRoot().
+    if (const std::filesystem::path& over = replacementRoot(); !over.empty())
+    {
+        std::error_code ignored;
+        const std::filesystem::path candidate = over / relative;
+        if (std::filesystem::exists(candidate, ignored))
+        {
+            return candidate;
+        }
+    }
+
+    return root_ / relative;
+}
+
+const std::filesystem::path& FileTable::replacementRoot()
+{
+    // Read once. A miss costs a stat per file id otherwise, and the answer
+    // cannot change while the client runs.
+    static const std::filesystem::path root = [] {
+        const char* set = std::getenv("MOGHOUSE_DAT_REPLACEMENTS");
+        if (set == nullptr || *set == '\0')
+        {
+            return std::filesystem::path{};
+        }
+
+        std::error_code ignored;
+        std::filesystem::path given{set};
+        if (!std::filesystem::is_directory(given, ignored))
+        {
+            std::printf("no DAT replacements at %s\n", set);
+            return std::filesystem::path{};
+        }
+
+        std::printf("DAT replacements: %s\n", set);
+        return given;
+    }();
+
+    return root;
 }
 
 #ifdef _WIN32

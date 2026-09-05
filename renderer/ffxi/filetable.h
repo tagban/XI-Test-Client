@@ -41,6 +41,19 @@ public:
     /// The path for a file id, or nothing if that id is not installed.
     std::optional<std::filesystem::path> path(size_t fileId) const;
 
+    /// Where a modder's replacement DATs live, or empty.
+    ///
+    /// MOGHOUSE_DAT_REPLACEMENTS names a folder mirroring the install's own
+    /// layout - `ROM/1/31.DAT`, `ROM9/0/7.DAT` - and a file present there is
+    /// used instead of the one in the install. The retail files are never
+    /// written to, which is the point: a mod is something you can delete.
+    ///
+    /// The layout is the install's rather than our own file ids on purpose.
+    /// It is what the existing tools distribute, so a mod written for any of
+    /// them drops in here unchanged, and it is what the wiki's own paths look
+    /// like. See docs/wiki/File-Ids.md.
+    static const std::filesystem::path& replacementRoot();
+
 private:
     std::filesystem::path root_;
     std::vector<uint8_t> vtable_;
