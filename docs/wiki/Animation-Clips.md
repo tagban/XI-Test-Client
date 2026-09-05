@@ -42,9 +42,26 @@ Confirmed by playing them:
 | `jmp` | jump |
 | `ded` | dead - the body lies down |
 | `std` | standing upper body, layered under a stride |
-| `si0`, `si1`, `si2` | sit down, stay sat, get up |
-| `sk1`, `sk2` | kneeling |
+| `si0`, `si1`, `si2` | sit down, stay sat, get up - **on the ground**, legs folded |
 | `eye3`, `mou4` | face - eyes and mouth |
+
+`sk1` and `sk2` were written down here as kneeling and are not: rendered from
+the side they are a standing body with an upper-body gesture, like `sf`, `sh`
+and `yu` beside them. The guess came from the name.
+
+## There is one seated pose and it is the ground
+
+`si0/si1/si2` is the whole of it. Rendered from the side, `si1` is a body sat
+on the floor with its legs folded up in front of it - not a body on a seat
+with its legs down. Nothing else in the set is seated: `sk`, `sf`, `sh` and
+`yu` are all standing, and the third clip set in `base+3` and `base+4` is the
+same actions again with a half of `2` rather than any new pose.
+
+So **putting somebody on a chair with their legs down has no animation to use**
+in these files. Placing the existing pose on a seat surface would sit them
+there cross-legged, which is a real thing to ship but is not the thing being
+asked for. Whether a chair pose exists at all in a later-added motion file is
+unanswered and is the thing to check first.
 
 ## What is not
 
