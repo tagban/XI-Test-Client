@@ -27,6 +27,9 @@ namespace MogHouse.Core.Ffxi;
 public sealed class FfxiFileTable
 {
     private readonly string _root;
+
+    /// This table's own replacement folder, or null to use the shared one.
+    private readonly string? _replacementRootHere;
     private readonly byte[] _vtable;
     private readonly byte[] _ftable;
 
@@ -36,9 +39,21 @@ public sealed class FfxiFileTable
     /// <summary>The highest-numbered expansion folder looked for.</summary>
     private const int LastRom = 9;
 
-    public FfxiFileTable(string installRoot)
+    /// <param name="installRoot">Where the retail client is installed.</param>
+    /// <param name="replacementRoot">
+    /// A folder of replacement DATs to search first, overriding
+    /// <see cref="ReplacementRoot"/> for this table alone.
+    ///
+    /// Null means "use the shared one", which is what the client passes. It is
+    /// here so that a test can point one table somewhere without pointing the
+    /// whole process there: the shared root reads an environment variable, and
+    /// a test that sets it changes what every other table in the process
+    /// resolves - including tables in tests running beside it.
+    /// </param>
+    public FfxiFileTable(string installRoot, string? replacementRoot = null)
     {
         _root = installRoot;
+        _replacementRootHere = replacementRoot;
         // Qualified: this class has its own Path method, which shadows the one
         // in System.IO inside the class body.
         _vtable = File.ReadAllBytes(System.IO.Path.Combine(installRoot, "VTABLE.DAT"));
@@ -113,7 +128,7 @@ public sealed class FfxiFileTable
         string relative = System.IO.Path.Combine(folder, (packed >> 7).ToString(), $"{packed & 0x7F}.DAT");
 
         // A replacement, if somebody has put one there.
-        if (ReplacementRoot is { Length: > 0 } over)
+        if ((_replacementRootHere ?? ReplacementRoot) is { Length: > 0 } over)
         {
             string candidate = System.IO.Path.Combine(over, relative);
             if (File.Exists(candidate))
@@ -151,6 +166,26 @@ public sealed class FfxiFileTable
     /// hands it to the renderer, which reads the same name.
     /// </para>
     /// </summary>
+    /// <summary>
+    /// The folder <paramref name="named"/> asks for, or null if there is not
+    /// one there. Empty and null both mean "the default place", which is "DAT
+    /// Replacements" beside the settings.
+    ///
+    /// Split out of <see cref="ReplacementRoot"/> so that the decision can be
+    /// tested without setting <c>MOGHOUSE_DAT_REPLACEMENTS</c>. That variable
+    /// is process-wide and the test runner runs classes in parallel, so a test
+    /// that sets it changes what every table in every other test resolves -
+    /// which is exactly the failure this was written after.
+    /// </summary>
+    public static string? ReplacementRootFrom(string? named)
+    {
+        string root = named is { Length: > 0 }
+            ? named
+            : System.IO.Path.Combine(FfxiServerProfileStore.DefaultConfigDirectory(), "DAT Replacements");
+
+        return Directory.Exists(root) ? root : null;
+    }
+
     public static string? ReplacementRoot
     {
         get
@@ -167,11 +202,7 @@ public sealed class FfxiFileTable
             }
 
             _replacementRootFor = named;
-            string root = named is { Length: > 0 }
-                ? named
-                : System.IO.Path.Combine(FfxiServerProfileStore.DefaultConfigDirectory(), "DAT Replacements");
-
-            if (!Directory.Exists(root))
+            if (ReplacementRootFrom(named) is not { } root)
             {
                 _replacementRoot = null;
                 return null;
