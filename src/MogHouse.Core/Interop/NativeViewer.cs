@@ -519,6 +519,18 @@ public sealed partial class NativeViewer : IDisposable
     [LibraryImport(LibraryName)]
     private static partial void mh_viewer_set_resting(IntPtr viewer, int resting);
 
+    /// <summary>Whether the character is sitting.</summary>
+    public void SetSitting(bool sitting)
+    {
+        if (!_disposed)
+        {
+            mh_viewer_set_sitting(_handle, sitting ? 1 : 0);
+        }
+    }
+
+    [LibraryImport(LibraryName)]
+    private static partial void mh_viewer_set_sitting(IntPtr viewer, int sitting);
+
     /// <summary>The character's job, level and stats, for the equipment screen.</summary>
     public void SetCharacterStats(NativeCharacterStats stats)
     {

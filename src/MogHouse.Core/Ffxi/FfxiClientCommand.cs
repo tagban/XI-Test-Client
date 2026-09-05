@@ -24,6 +24,12 @@ public enum FfxiClientCommandKind
     /// <summary>Accept the home point after dying.</summary>
     HomePoint,
 
+    /// <summary>Sit down. A pose the client holds, not a state the server keeps.</summary>
+    Sit,
+
+    /// <summary>Stand back up. Walking does it too.</summary>
+    Stand,
+
     /// <summary>
     /// Report something wrong, from where it is wrong.
     ///
@@ -106,6 +112,12 @@ public static class FfxiClientCommands
             // A tell needs someone to tell. The name is the first word and
             // everything after it is the message, which is why this cannot go
             // through Speak.
+            // A pose rather than anything the server is told about. /stand
+            // is the way back out for somebody who would rather type it than
+            // walk, which is how the real client does it too.
+            "sit" or "sitchair" => new FfxiClientCommand(FfxiClientCommandKind.Sit, name, rest),
+            "stand" => new FfxiClientCommand(FfxiClientCommandKind.Stand, name, rest),
+
             "tell" or "t" or "whisper" or "w" or "send" => Whisper(name, rest),
 
             _ => new FfxiClientCommand(FfxiClientCommandKind.Unsupported, name, rest),

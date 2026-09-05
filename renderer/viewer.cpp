@@ -2747,6 +2747,10 @@ bool mh::ViewerLink::takeFormResult(int& button, std::vector<std::string>& value
 
 void mh::ViewerLink::setResting(bool resting) { resting_ = resting; }
 
+void mh::ViewerLink::setSitting(bool sitting) { sitting_ = sitting; }
+
+bool mh::ViewerLink::sitting() const { return sitting_; }
+
 bool mh::ViewerLink::resting() const { return resting_; }
 
 void mh::ViewerLink::setPlayerName(std::string name)
@@ -6351,6 +6355,7 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
     // somewhere it can be read.
     const ffxi::Animation* playing = nullptr;
     const ffxi::Animation* idleClip = nullptr;
+    const ffxi::Animation* sitClip = nullptr;
     const ffxi::Animation* walkClip = nullptr;
     const ffxi::Animation* runClip = nullptr;
     const ffxi::Animation* jumpClip = nullptr;
@@ -6385,6 +6390,7 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
         };
         idleClip = find("idl0");
         restClip = find("res0");
+        sitClip = find("si1");
         walkClip = find("wlk0");
         runClip = find("run0");
         jumpClip = find("jmp0");
@@ -8711,9 +8717,13 @@ const float kWavePeriod = [] {
             // Resting wins over standing still, and over walking: the
             // server does not let a resting character go anywhere, so if both
             // look true the rest is the honest one.
-            const ffxi::Animation* wanted = link && link->resting() && restClip
-                                                ? restClip
-                                                : (moved > 1e-4f ? moving : idleClip);
+            // Sitting is left by walking out of it, so movement wins. Resting
+            // still beats both: the server will not let a resting character go
+            // anywhere, so if all three look true the rest is the honest one.
+            const bool satDown = link && link->sitting() && sitClip && moved <= 1e-4f;
+            const ffxi::Animation* wanted = link && link->resting() && restClip ? restClip
+                                            : satDown                          ? sitClip
+                                            : (moved > 1e-4f ? moving : idleClip);
             if (wanted && wanted != playing)
             {
                 playing = wanted;

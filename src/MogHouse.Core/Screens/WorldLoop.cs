@@ -592,6 +592,19 @@ public sealed class WorldLoop
                 Wait(_session.ReturnToHomePointAsync());
                 return;
 
+            // Answered here rather than sent. Sitting is a pose the client
+            // holds; the server has no opinion about it and moving ends it,
+            // which the renderer decides for itself.
+            case FfxiClientCommandKind.Sit:
+                _world.ShowSitting(true);
+                _world.Say(null, "You sit down.");
+                return;
+
+            case FfxiClientCommandKind.Stand:
+                _world.ShowSitting(false);
+                _world.Say(null, "You stand up.");
+                return;
+
             // Every channel the real client answers to, and the short forms
             // nobody types the long version of: /s /sh /y /p /l /ls /l2 /u /em.
             case FfxiClientCommandKind.Chat:

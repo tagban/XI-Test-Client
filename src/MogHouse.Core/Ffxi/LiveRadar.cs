@@ -473,6 +473,21 @@ public sealed class LiveRadar : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the character is sitting.
+    ///
+    /// Its own state rather than a kind of resting: resting is something the
+    /// server puts you in and will not let you walk out of, and sitting is a
+    /// pose you choose and leave by moving.
+    /// </summary>
+    public void ShowSitting(bool sitting)
+    {
+        if (!_closed)
+        {
+            _viewer.SetSitting(sitting);
+        }
+    }
+
     /// <summary>The character's job, level and stats.</summary>
     public void ShowCharacterStats(NativeCharacterStats stats)
     {

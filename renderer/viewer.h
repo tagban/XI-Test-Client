@@ -829,6 +829,16 @@ public:
     void setResting(bool resting);
     bool resting() const;
 
+    /// Whether the character is sitting down.
+    ///
+    /// Its own state rather than a kind of resting: resting is something the
+    /// server puts you in and will not let you walk out of, and sitting is a
+    /// pose you choose and leave by moving. The clips are si0 to sit down, si1
+    /// to stay sat and si2 to get up, each with a 0 for the legs and a 1 for
+    /// everything above the waist, the same split as idl0/idl1.
+    void setSitting(bool sitting);
+    bool sitting() const;
+
     void setPlayerName(std::string name);
     std::string playerName() const;
 
@@ -961,6 +971,7 @@ private:
     // held by reference.
     std::string playerName_;
     std::atomic<bool> resting_{false};
+    std::atomic<bool> sitting_{false};
     std::string look_;
     bool lookChanged_{false};
     std::atomic<bool> lineup_{false};

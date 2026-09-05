@@ -268,4 +268,15 @@ public class FfxiTwoWordNameTests
         // the time, so this guards the one that would look safest.
         Assert.NotEqual((int)FfxiChatKind.Yell, (int)FfxiChatEcho.For(FfxiChatKind.Yell));
     }
+
+    [Theory]
+    [InlineData("/sit", FfxiClientCommandKind.Sit)]
+    [InlineData("/sitchair", FfxiClientCommandKind.Sit)]
+    [InlineData("/stand", FfxiClientCommandKind.Stand)]
+    public void SittingIsAnsweredRatherThanSaid(string typed, FfxiClientCommandKind kind)
+    {
+        // A pose the client holds, so it must not reach the zone as speech -
+        // which is the fault /logout had, broadcast as the word "/logout".
+        Assert.Equal(kind, FfxiClientCommands.Parse(typed).Kind);
+    }
 }

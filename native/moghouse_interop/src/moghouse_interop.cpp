@@ -387,6 +387,14 @@ void mh_viewer_set_resting(MhViewerHandle viewer, int32_t resting)
     }
 }
 
+void mh_viewer_set_sitting(MhViewerHandle viewer, int32_t sitting)
+{
+    if (viewer)
+    {
+        viewer->link.setSitting(sitting != 0);
+    }
+}
+
 void mh_viewer_set_character_stats(MhViewerHandle viewer, const MhCharacterStats* stats)
 {
     if (!viewer || !stats)

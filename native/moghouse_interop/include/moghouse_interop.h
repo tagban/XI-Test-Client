@@ -211,6 +211,11 @@ MH_API void mh_viewer_set_inventory(MhViewerHandle viewer,
 /// counts down, and what /heal looks like.
 MH_API void mh_viewer_set_resting(MhViewerHandle viewer, int32_t resting);
 
+/// Whether the character is sitting. Its own state rather than a kind of
+/// resting: resting is something the server puts you in, sitting is a pose you
+/// choose and leave by walking out of.
+MH_API void mh_viewer_set_sitting(MhViewerHandle viewer, int32_t sitting);
+
 /// The character's job, level and stats, for the equipment screen.
 ///
 /// Stats are STR, DEX, VIT, AGI, INT, MND, CHR in that order: the base from
