@@ -6638,6 +6638,10 @@ constexpr float kGravity = 26.0f;
     /// How far down to look for the floor while falling.
     constexpr float kFallReach = 500.0f;
 
+/// How close you have to be to talk to your target. The reach the cone this
+/// replaced used, kept because a target stays selected as you walk off.
+constexpr float kTalkReach = 6.0f;
+
 /// How long one shoreline wave takes, in seconds.
 ///
 /// A setting, not a reading. The curves say the shape of a wave exactly and
@@ -7666,50 +7670,37 @@ const float kWavePeriod = [] {
                 }
                 else if (event.key.key == SDLK_E && driving && link)
                 {
-                    // Talk to whoever is closest in front.
+                    // Talk to the target, and to nobody else.
                     //
-                    // The real client targets first and acts second; this is
-                    // the short version, because a target you cannot see the
-                    // name of is not worth the extra step yet. In front rather
-                    // than merely near, so standing between two NPCs picks the
-                    // one being faced instead of whichever happens to be a few
-                    // centimetres closer.
-                    const float facing = camera.yaw;
-                    const float aheadX = -std::sin(facing);
-                    const float aheadZ = -std::cos(facing);
-
-                    uint32_t chosen = 0;
-                    float best = 0.0f;
-                    for (const mh::RadarEntity& entity : radarEntities)
+                    // Target first, act second, the way the real client does.
+                    // This used to pick whoever was nearest inside a cone in
+                    // front instead, which talks to people you never selected -
+                    // and got the cone backwards besides, pointing it out of
+                    // the back of the character's head. Tab and a click are
+                    // what choose somebody; E only acts on what they chose.
+                    //
+                    // Still bounded by distance, because a target stays
+                    // selected as you walk away from it and shouting a
+                    // conversation across the zone is not a thing.
+                    if (targetId != 0)
                     {
-                        const float dx = entity.x - characterAt.x;
-                        const float dz = entity.z - characterAt.z;
-                        const float distance = std::sqrt(dx * dx + dz * dz);
-                        if (distance < 0.01f || distance > 6.0f)
+                        for (const mh::RadarEntity& entity : radarEntities)
                         {
-                            continue;
-                        }
+                            if (entity.id != targetId)
+                            {
+                                continue;
+                            }
 
-                        // How squarely it is in front, as a cosine.
-                        const float towards = (dx / distance) * aheadX + (dz / distance) * aheadZ;
-                        if (towards < 0.5f)
-                        {
-                            continue;   // off to the side or behind
+                            const float dx = entity.x - characterAt.x;
+                            const float dz = entity.z - characterAt.z;
+                            if (std::sqrt(dx * dx + dz * dz) <= kTalkReach)
+                            {
+                                link->requestTalk(targetId);
+                                facingMe = targetId;
+                                facingMeStarted = false;
+                            }
+                            break;
                         }
-
-                        const float score = towards / distance;
-                        if (score > best)
-                        {
-                            best = score;
-                            chosen = entity.id;
-                        }
-                    }
-
-                    if (chosen != 0)
-                    {
-                        link->requestTalk(chosen);
-                        facingMe = chosen;
-                        facingMeStarted = false;
                     }
                 }
                 else if (event.key.key == SDLK_KP_MULTIPLY)
