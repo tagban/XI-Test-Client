@@ -66,6 +66,16 @@ public:
                                   float maxDrop = std::numeric_limits<float>::max(),
                                   float stepUp = kDefaultStepUp) const;
 
+    /// The seat at (x, z), or nothing if the surface there is ordinary ground.
+    ///
+    /// Same search as groundAt, narrowed to faces marked as seats, so that
+    /// asking "is there a bench in front of me" is one lookup rather than a
+    /// height comparison against the floor - which would call the top of any
+    /// step a chair.
+    std::optional<float> seatAt(float x, float z, float near,
+                                float maxDrop = std::numeric_limits<float>::max(),
+                                float stepUp = kDefaultStepUp) const;
+
     /// How far above your feet a surface can be and still be a step.
     ///
     /// 0.95 caught on the fountain plaza steps in Bastok Markets: the server's
@@ -191,8 +201,9 @@ public:
     /// is not, so you jump over it and land back on the floor.
     ///
     /// `walkable` says whether the faces can be stood on, which is the whole
-    /// point of adding them.
-    void addTriangles(const std::vector<Vec3>& corners, bool walkable);
+    /// point of adding them. `seat` marks them as somewhere to sit as well,
+    /// which is what separates a bench top from the plaza it stands on.
+    void addTriangles(const std::vector<Vec3>& corners, bool walkable, bool seat = false);
 
     Vec3 boundsMin() const { return boundsMin_; }
     Vec3 boundsMax() const { return boundsMax_; }
@@ -210,6 +221,10 @@ private:
         /// the instance's height copied onto every triangle it produced.
         bool hasWater;
         float waterY;
+        /// True when this face is a seat rather than the ground: the top of a
+        /// bench or a crate, added from a named model. Terrain is never one,
+        /// so a character standing on a hillside is not sitting on it.
+        bool seat;
     };
 
     /// Every triangle whose x/z footprint touches this cell.

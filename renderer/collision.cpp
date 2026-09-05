@@ -140,6 +140,7 @@ Collision::Collision(const std::vector<const ffxi::Zone*>& zones)
             // the parser's own convention. The height is an FFXI vertical, so
             // it turns the same way everything else does.
             triangle.hasWater = instance.waterHeight != 0.0f;
+            triangle.seat = false;
             triangle.waterY = -instance.waterHeight;
 
             for (const Vec3& p : {triangle.a, triangle.b, triangle.c})
@@ -175,6 +176,7 @@ Collision Collision::fromTriangles(const std::vector<Vec3>& corners)
         // which a floor answers the same way a wall does.
         triangle.walkable = false;
         triangle.hasWater = false;
+        triangle.seat = false;
         triangle.waterY = 0.0f;
         built.triangles_.push_back(triangle);
 
@@ -189,7 +191,7 @@ Collision Collision::fromTriangles(const std::vector<Vec3>& corners)
     return built;
 }
 
-void Collision::addTriangles(const std::vector<Vec3>& corners, bool walkable)
+void Collision::addTriangles(const std::vector<Vec3>& corners, bool walkable, bool seat)
 {
     if (corners.size() < 3)
     {
@@ -220,6 +222,7 @@ void Collision::addTriangles(const std::vector<Vec3>& corners, bool walkable)
         // chair's legs are not either.
         triangle.walkable = walkable && std::fabs(triangle.normal.y) >= kWalkableNormalY;
         triangle.hasWater = false;
+        triangle.seat = seat;
         triangle.waterY = 0.0f;
         triangles_.push_back(triangle);
 
@@ -342,6 +345,38 @@ std::optional<float> Collision::groundAt(float x, float z, float near, float max
     {
         const Triangle& triangle = triangles_[index];
         if (!triangle.walkable)
+        {
+            continue;
+        }
+        const std::optional<float> y = heightAt(triangle.a, triangle.b, triangle.c, x, z);
+        if (!y || *y > near + stepUp || *y < near - maxDrop)
+        {
+            continue;
+        }
+        if (!best || *y > *best)
+        {
+            best = y;
+        }
+    }
+    return best;
+}
+
+std::optional<float> Collision::seatAt(float x, float z, float near, float maxDrop, float stepUp) const
+{
+    if (triangles_.empty())
+    {
+        return std::nullopt;
+    }
+
+    const std::vector<uint32_t>* candidates = nullptr;
+    std::vector<uint32_t> scratch;
+    forEachNear(x, z, x, z, candidates, scratch);
+
+    std::optional<float> best;
+    for (uint32_t index : *candidates)
+    {
+        const Triangle& triangle = triangles_[index];
+        if (!triangle.walkable || !triangle.seat)
         {
             continue;
         }

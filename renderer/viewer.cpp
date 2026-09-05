@@ -3454,7 +3454,7 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
 
                     if (!perches.empty())
                     {
-                        collision.addTriangles(perches, true);
+                        collision.addTriangles(perches, true, true);
                         std::printf("standable: %zu triangles from %zu of %zu named models\n",
                                     perches.size() / 3, perchModels, standableModels().size());
                     }
@@ -5435,7 +5435,10 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
             {
                 if (auto ground = collision.nearestGround(px, z, 60.0f, 400.0f))
                 {
-                    std::printf("   z %7.1f  ground y %7.2f\n", z, ground->y);
+                    // And whether that ground is somewhere to sit, which is
+                    // the same walk and the question /sit asks.
+                    const bool seat = collision.seatAt(px, z, ground->y, 0.1f, 0.1f).has_value();
+                    std::printf("   z %7.1f  ground y %7.2f%s\n", z, ground->y, seat ? "   seat" : "");
                 }
                 else
                 {
@@ -6638,9 +6641,21 @@ constexpr float kGravity = 26.0f;
     /// How far down to look for the floor while falling.
     constexpr float kFallReach = 500.0f;
 
+/// How high a seat may be above the feet and still be sat on, and how far in
+/// front of the character to look for one.
+///
+/// Southern San d'Oria's obj_chair01 tops out 0.74 above the plaza, which is
+/// what set the rise: high enough for a bench, low enough that the wall behind
+/// it is not one. The reach is a step and a bit - the seat has to be in front
+/// of you, not across the square - and the step is fine enough that a bench
+/// caught side-on is not walked past between samples.
 /// How close you have to be to talk to your target. The reach the cone this
 /// replaced used, kept because a target stays selected as you walk off.
 constexpr float kTalkReach = 6.0f;
+
+constexpr float kSeatRise = 1.2f;
+constexpr float kSeatReach = 1.6f;
+constexpr float kSeatStep = 0.2f;
 
 /// How long one shoreline wave takes, in seconds.
 ///
@@ -6688,6 +6703,13 @@ const float kWavePeriod = [] {
     }();
 
     float fallSpeed = 0.0f;
+
+    /// Whether the last frame was sitting, so that sitting down is an event
+    /// rather than a state. Looking for a seat has to happen once, on the way
+    /// down: doing it every frame would re-seat a character who had shuffled
+    /// along a bench, and doing it never leaves /sit on the floor beside the
+    /// thing it should be on.
+    bool wasSitting = false;
 
     const float pinnedFrame = options.frame.value_or(-1.0f);
     const float shaderMode = options.shaderMode;
@@ -8754,6 +8776,53 @@ const float kWavePeriod = [] {
                     }
                 }
             }
+
+            // Sitting down looks for something to sit on.
+            //
+            // Entirely local: the seat is in the collision because
+            // standable-models.txt put it there, so this asks the geometry
+            // rather than the server and behaves the same whether the server
+            // has any idea what a chair is. That is the point - /sit still
+            // goes out as an ordinary sit, and only this client draws you on
+            // the bench.
+            const bool sittingNow = link && link->sitting();
+            if (sittingNow && !wasSitting && !collision.empty() && !noclip)
+            {
+                // Already on one - sat down while stood on a bench - so stay
+                // put rather than hunting for a second seat to hop to.
+                const bool onASeat =
+                    collision.seatAt(characterAt.x, characterAt.z, characterAt.y, kSeatRise, kSeatRise).has_value();
+
+                if (!onASeat)
+                {
+                    const float aheadX = std::sin(characterFacing);
+                    const float aheadZ = std::cos(characterFacing);
+                    for (float reach = kSeatStep; reach <= kSeatReach; reach += kSeatStep)
+                    {
+                        const float x = characterAt.x + aheadX * reach;
+                        const float z = characterAt.z + aheadZ * reach;
+                        const std::optional<float> seat =
+                            collision.seatAt(x, z, characterAt.y, kSeatRise, kSeatRise);
+                        if (!seat)
+                        {
+                            continue;
+                        }
+
+                        characterAt = {x, *seat, z};
+                        fallSpeed = 0.0f;
+
+                        // Turn around. You approach a bench facing it and sit
+                        // with your back to it, so the heading that put the
+                        // seat in front is the wrong way round by half a turn.
+                        characterFacing += 3.14159265f;
+                        std::printf("sit: on a seat at %.1f %.1f %.1f, %.1f in front\n",
+                                    characterAt.x, characterAt.y, characterAt.z, reach);
+                        break;
+                    }
+                }
+            }
+            wasSitting = sittingNow;
+
             writeCharacterInstance();
 
             // The camera sits behind and above the character, at head height.
