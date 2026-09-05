@@ -33,8 +33,23 @@ public enum FfxiEmoteMode : byte
 /// Number is validated as a *range* rather than a list - Emote::Point (0) to
 /// Emote::Aim (96) - so the server accepts ids inside that span even where it
 /// has no name for them, and there are unnamed gaps at 39, 45-64, 69-72 and
-/// 75-95. What a retail client renders for one of those is a question only a
-/// retail client can answer.
+/// 75-95: 46 ids of the 97. What a retail client renders for one of those is a
+/// question only a retail client can answer.
+///
+/// <para>
+/// Checked against a server rather than assumed. The handler validates the
+/// field with a range check between those two names, and then rebroadcasts
+/// whatever arrived - the only ids with anything further to satisfy are the
+/// bell, which wants a bell equipped or lockstyled, and the job emote, which
+/// wants the job unlocked. An unnamed id matches neither and goes out to
+/// everyone in range unchanged.
+/// </para>
+///
+/// <para>
+/// So a custom emote needs no server change: it is an unused number in a range
+/// the server already passes through. That matters, because a client that
+/// needs a patched server only works on patched servers.
+/// </para>
 /// </summary>
 public static class FfxiMotionPacket
 {
