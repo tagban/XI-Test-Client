@@ -1,0 +1,21 @@
+# Placed models you are allowed to stand on.
+#
+# The server's collision mesh is the terrain the server cares about - the
+# ground a player may walk over - and furniture is not in it. A bench stops you
+# because its sides are there and its top is not, so you jump the 0.74 units
+# over an obj_chair01 and land back on the plaza having passed through it.
+#
+# Naming a model here adds its drawn geometry to the collision as ground, so
+# landing on it, stepping up onto it and falling off it all work the way they
+# do anywhere else. Only faces shallow enough to stand on are taken, so a
+# chair's legs and the underside of a table are not offered as floor.
+#
+# One model name per line. Keep it to things a person could plausibly stand on
+# in the real game: this is a deliberate list rather than "everything drawn",
+# because making all scenery walkable would let you climb the walls.
+#
+# Southern San d'Oria's plaza, which is where this started - the benches ringing
+# the fountain and the crates beside them.
+obj_chair01
+id_box01
+id_box02

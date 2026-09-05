@@ -1094,6 +1094,39 @@ bool isTriggeredEffectLibrary(const std::string& directory)
            directory.find("/fses") != std::string::npos;
 }
 
+/// Models a player is allowed to stand on, from assets/standable-models.txt.
+///
+/// A flat list rather than a per-zone one: a bench is the same model wherever
+/// it is placed, and a list keyed by zone would repeat itself for every plaza
+/// in the game.
+const std::vector<std::string>& standableModels()
+{
+    static const std::vector<std::string> named = [] {
+        std::vector<std::string> found;
+        std::ifstream file = openAsset("standable-models.txt", "MOGHOUSE_STANDABLE_MODELS");
+        if (!file)
+        {
+            return found;
+        }
+
+        std::string line;
+        while (std::getline(file, line))
+        {
+            while (!line.empty() && (line.back() == '\r' || line.back() == ' '))
+            {
+                line.pop_back();
+            }
+            if (!line.empty() && line[0] != '#')
+            {
+                found.push_back(line);
+            }
+        }
+        return found;
+    }();
+
+    return named;
+}
+
 /// Placed models the retail client does not show, from assets/hidden-models.txt:
 /// the older of two versions of a building the placement table lists at the
 /// same spot. See the file for the case and what is not known.
@@ -3362,6 +3395,70 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
                 // What a name can be hidden behind. See Collision::fromTriangles
                 // for why this is not the collision mesh.
                 sight = mh::Collision::fromTriangles(corners);
+
+                // And the things you are allowed to stand on that the server's
+                // mesh leaves out - benches, crates. Their drawn geometry goes
+                // into the walking collision as ground, so landing on one and
+                // stepping off it work the way they do anywhere else rather
+                // than needing a case of their own.
+                {
+                    std::vector<mh::Vec3> perches;
+                    size_t perchModels = 0;
+                    for (const std::string& model : standableModels())
+                    {
+                        auto range = zone->instanceRanges.find(model);
+                        if (range == zone->instanceRanges.end() || range->second.second == 0)
+                        {
+                            continue;
+                        }
+
+                        const uint32_t first = range->second.first;
+                        const uint32_t last = first + range->second.second;
+                        ++perchModels;
+
+                        for (const mh::InstancedDraw& draw : zone->draws)
+                        {
+                            if (draw.instanceOffset < first || draw.instanceOffset >= last)
+                            {
+                                continue;
+                            }
+                            for (uint32_t n = 0; n < draw.instanceCount; ++n)
+                            {
+                                const size_t at = (static_cast<size_t>(draw.instanceOffset) + n) * 16;
+                                if (at + 16 > zone->instances.size())
+                                {
+                                    break;
+                                }
+                                const float* m = zone->instances.data() + at;
+                                const auto place = [&](uint32_t index) {
+                                    const mh::Vertex& v = zone->vertices[index];
+                                    return mh::Vec3{
+                                        m[0] * v.position[0] + m[4] * v.position[1] + m[8] * v.position[2] + m[12],
+                                        m[1] * v.position[0] + m[5] * v.position[1] + m[9] * v.position[2] + m[13],
+                                        m[2] * v.position[0] + m[6] * v.position[1] + m[10] * v.position[2] + m[14]};
+                                };
+                                for (uint32_t i = 0; i + 2 < draw.indexCount; i += 3)
+                                {
+                                    const uint32_t base = draw.indexOffset + i;
+                                    if (base + 2 >= zone->indices.size())
+                                    {
+                                        break;
+                                    }
+                                    perches.push_back(place(zone->indices[base]));
+                                    perches.push_back(place(zone->indices[base + 1]));
+                                    perches.push_back(place(zone->indices[base + 2]));
+                                }
+                            }
+                        }
+                    }
+
+                    if (!perches.empty())
+                    {
+                        collision.addTriangles(perches, true);
+                        std::printf("standable: %zu triangles from %zu of %zu named models\n",
+                                    perches.size() / 3, perchModels, standableModels().size());
+                    }
+                }
                 std::printf("sight: %zu opaque triangles drawn, %zu see-through left out\n",
                             corners.size() / 3, seeThrough);
             }

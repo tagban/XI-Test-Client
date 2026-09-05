@@ -183,6 +183,17 @@ public:
     /// notion of walkable.
     static Collision fromTriangles(const std::vector<Vec3>& corners);
 
+    /// Adds world-space triangles to what is already here, and re-sorts.
+    ///
+    /// For the things the server's mesh leaves out. Its terrain is what the
+    /// server cares about - the ground a player may walk on - so furniture is
+    /// not in it: a bench stops you because its sides are there, and its top
+    /// is not, so you jump over it and land back on the floor.
+    ///
+    /// `walkable` says whether the faces can be stood on, which is the whole
+    /// point of adding them.
+    void addTriangles(const std::vector<Vec3>& corners, bool walkable);
+
     Vec3 boundsMin() const { return boundsMin_; }
     Vec3 boundsMax() const { return boundsMax_; }
 
