@@ -58,7 +58,13 @@ fn fragmentMain(in : WaterOut) -> @location(0) vec4<f32> {
     // Port Bastok is close to black with the dusk sky on it; a green-teal
     // river tint made it a grey-green slab.
     let sea = uniforms.fogRange.z;
-    let body = mix(vec3<f32>(0.09, 0.20, 0.17), vec3<f32>(0.015, 0.03, 0.04), sea);
+    // The sea was near-black (0.015, 0.03, 0.04), taken from Port Bastok's
+    // harbour under a dusk sky. Valkurm's shallow bay at noon is a tropical
+    // teal-green, and read as grey-black slab instead. A teal sea that keeps
+    // some depth: brighter and greener than the harbour, and still dark enough
+    // that a dusk zone's low ambient and fog carry it back toward black.
+    let seaBody = vec3<f32>(0.01, 0.30, 0.26);
+    let body = mix(vec3<f32>(0.09, 0.20, 0.17), seaBody, sea);
 
     // The ripple sheet, sampled twice drifting at different speeds and angles so
     // it does not read as one sheet sliding.

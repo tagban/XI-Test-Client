@@ -3851,7 +3851,12 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
                 // tinted sheet with no ripple on it. Earlier names are
                 // preferred: the sea sheets read best on open water, the
                 // river ones on a channel.
-                static const char* const kWaterSheets[] = {"umi2", "umi1", "sea01", "kaw1", "ike1",
+                // umi0 belongs with the open-sea sheets and was missing:
+                // Valkurm Dunes names its bay umi0, so without it the whole
+                // sea fell through to the river tint and its half-transparent
+                // alpha, and the sandy bed showed through until the teal
+                // washed out to grey. It is a sea sheet, so it leads.
+                static const char* const kWaterSheets[] = {"umi0", "umi2", "umi1", "sea01", "kaw1", "ike1",
                                                           "ike2",  "umna", "nami",  "miz1", "miz2"};
                 // The same sheets with the rivers first. A zone whose water
                 // is mostly untextured meshes - Bastok Markets' canal and
@@ -3946,8 +3951,9 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
                     {
                         batchTextures.push_back(gpu);
                         waterView = batchTextures.back().CreateView();
-                        // The first three names are the open-water sheets.
-                        waterIsSea = sheetRank <= 2;
+                        // The first four names are the open-water sheets
+                        // (umi0/umi2/umi1/sea01); the rest are rivers and ponds.
+                        waterIsSea = sheetRank <= 3;
                         std::printf("water texture: %s%s\n", sheetName, waterIsSea ? " (sea)" : "");
                     }
                 }
