@@ -6742,6 +6742,14 @@ constexpr float kGravity = 26.0f;
 /// it is not one. The reach is a step and a bit - the seat has to be in front
 /// of you, not across the square - and the step is fine enough that a bench
 /// caught side-on is not walked past between samples.
+/// How far you have to actually move to be standing rather than sitting.
+///
+/// Bigger than the idle/walk threshold on purpose. That one asks "is the
+/// character moving at all" and answers yes to a hair of drift; this one ends
+/// a pose, and a sit that lets go because the ground settled underfoot is
+/// worse than one that waits for a real step.
+constexpr float kStandUpStep = 0.01f;
+
 /// How close you have to be to talk to your target. The reach the cone this
 /// replaced used, kept because a target stays selected as you walk off.
 constexpr float kTalkReach = 6.0f;
@@ -8809,6 +8817,19 @@ const float kWavePeriod = [] {
                     moved = std::sqrt(dx * dx + dz * dz);
                     characterAt.x = allowed.x;
                     characterAt.z = allowed.z;
+                }
+
+                // Walking out of a sit ends it.
+                //
+                // The pose already gave way to the walk - the clip is chosen
+                // from what the character is doing - but the state behind it
+                // stayed on, so stopping dropped straight back into the sit
+                // and you had to say so to stand up. Getting up is the one
+                // thing every player does after sitting, and no command
+                // should be needed for it: standing is what moving means.
+                if (moved > kStandUpStep && link && link->sitting())
+                {
+                    link->setSitting(false);
                 }
 
                 // Facing follows the camera, not the step. Walking backwards or
