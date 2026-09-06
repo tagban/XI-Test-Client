@@ -114,6 +114,18 @@ fn fragmentMain(in : VertexOut) -> @location(0) vec4<f32> {
         foam = mix(foam, uniforms.fogColour.rgb, fog);
         return vec4<f32>(foam, alpha);
     }
+    // The wet-sand wash (wave.w < 0): a dark opacity layer that fades over the
+    // sand on the wave's own clock, not part of the water. wave.z is its
+    // opacity curve - it swells as the wave runs up and clears as it draws
+    // back - and scroll.z carries how heavy the darkening gets. Shaped by the
+    // sheet's own texture alpha so it reads as the wash's pattern spreading
+    // over the sand rather than a flat rectangle darkening.
+    if (effect.wave.w < -0.5) {
+        let shape = 0.35 + 0.65 * sampled.a;
+        let washAlpha = clamp(shape * effect.wave.z * effect.scroll.z, 0.0, 0.85);
+        let wet = vec3<f32>(0.05, 0.04, 0.03);
+        return vec4<f32>(wet, washAlpha);
+    }
     return vec4<f32>(colour, alpha);
 }
 )";

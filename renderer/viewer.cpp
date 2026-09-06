@@ -1897,7 +1897,14 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
         // anything there with a scaleZ curve is a wave whatever its texture.
         const bool seaDirectory = effect.directory.find("umi") != std::string::npos;
         const bool wave = wavesEnabled && !effect.scaleZCurve.empty() && (water || seaDirectory);
-        if (wave)
+        // A wash is a nami sheet that fades but does not stretch: nmic, the
+        // broad shallow sheet that darkens the sand as the wave runs over it
+        // and clears as the wave draws back. It carries an opacity curve
+        // (0x2d) but no scaleZ (0x29), so it pulses in place rather than
+        // rolling, and it is drawn dark rather than as white foam.
+        const bool wash = wavesEnabled && !wave && seaDirectory && effect.scaleZCurve.empty() &&
+                          !effect.opacityCurve.empty() && modelName.rfind("nm", 0) == 0;
+        if (wave || wash)
         {
             water = false;
         }
@@ -1972,10 +1979,13 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
             // can animate properly.
             const float perSecond = effect.scroll * 30.0f;
             mh::EffectParams params{0.0f, perSecond, effect.nightOnly, effect.textureAnimation};
-            if (wave)
+            if (wave || wash)
             {
                 // The day curve is a visibility gate and a wave is not gated;
-                // ours run on the loop clock instead.
+                // ours run on the loop clock instead. A wash routes the same
+                // way - out of the water pass, into the effect pass with its
+                // curves - and is told apart at draw time by having an opacity
+                // curve but no scaleZ.
                 params.curve.clear();
                 params.foam = true;
                 params.wave.scaleZ = effect.scaleZCurve;
@@ -8419,10 +8429,17 @@ const float kWavePeriod = [] {
                 // tiles along the stretched strip rather than smearing one copy
                 // over it. It is always at least one for a wave, so it doubles
                 // as the shader's "this is foam" marker.
+                // A wash has an opacity curve but no scaleZ: it does not roll,
+                // it darkens the sand in place on the wave's clock. Marked with
+                // a negative w so the shader draws it dark rather than as white
+                // foam, and given the raw opacity curve rather than the foam's
+                // brightened one.
+                const bool wash = draw.wave.scaleZ.empty() && !draw.wave.opacity.empty();
                 const float stretch = draw.wave.scaleZ.empty() ? 1.0f : at(draw.wave.scaleZ, 1.0f);
                 const float wave[4] = {at(draw.wave.u, 0.0f), at(draw.wave.v, 0.0f),
-                                       std::min(at(draw.wave.opacity, 0.25f) * 4.0f * gain, 1.0f),
-                                       std::max(stretch, 1.0f)};
+                                       wash ? at(draw.wave.opacity, 0.25f)
+                                            : std::min(at(draw.wave.opacity, 0.25f) * 4.0f * gain, 1.0f),
+                                       wash ? -1.0f : std::max(stretch, 1.0f)};
                 // MOGHOUSE_WAVE_WATCH=1 says, once, what each wave draw is and
                 // where its copies stand. A wave that is not on screen and a
                 // wave that is not being drawn look the same from the beach.
@@ -8469,6 +8486,19 @@ const float kWavePeriod = [] {
                 }
                 queue.WriteBuffer(effectWaveBuffers[i], 4 * sizeof(float), wave, sizeof(wave));
 
+                // How dark the wet-sand wash gets, into scroll.z, which the
+                // wash branch does not otherwise use. MOGHOUSE_WASH_DARK tunes
+                // it; the opacity curve still fades it in and out on the wave's
+                // clock, this only says how heavy it is at its peak.
+                if (wash)
+                {
+                    static const float washDark = [] {
+                        const char* set = std::getenv("MOGHOUSE_WASH_DARK");
+                        return set ? std::strtof(set, nullptr) : 0.5f;
+                    }();
+                    queue.WriteBuffer(effectWaveBuffers[i], 2 * sizeof(float), &washDark, sizeof(washDark));
+                }
+
                 if (draw.wave.scaleZ.empty() || !instanceBuffer)
                 {
                     continue;
@@ -8482,7 +8512,18 @@ const float kWavePeriod = [] {
                 // against -112. Dividing by the extent (the old spreadPerUnit)
                 // shrank it to 0.68 and left the foam stranded out at sea; the
                 // long strip that reached the sand looked wrong and was right.
-                const float spread = stretch;
+                // MOGHOUSE_WAVE_REACH extends (or shortens) how far up the sand
+                // the foam runs. Op 0x29 scales each wave's own geometry, so a
+                // wave with a short strip (the raised nms, localZ ~4) reaches
+                // far less than a long one (the flat nmia, localZ 11.25) and its
+                // foam stops partway to the sand. A multiplier here lets the
+                // reach be tuned by eye until the foam wets the whole beach; 1.0
+                // is the geometry as the curve gives it.
+                static const float reach = [] {
+                    const char* set = std::getenv("MOGHOUSE_WAVE_REACH");
+                    return set ? std::strtof(set, nullptr) : 1.0f;
+                }();
+                const float spread = stretch * reach;
                 for (uint32_t n = 0; n < draw.instanceCount; ++n)
                 {
                     const size_t at16 = (static_cast<size_t>(draw.instanceOffset) + n) * 16;
