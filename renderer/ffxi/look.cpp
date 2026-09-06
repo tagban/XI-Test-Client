@@ -125,14 +125,35 @@ size_t modelFileId(Race race, LookSlot slot, uint16_t modelId)
         return 0;
     }
 
-    // An empty hand. Zero is a real model everywhere else - face 0 is a
-    // face - but no weapon in the item table has model zero, so for a weapon
-    // it can only mean nothing is held. Without this the file at the foot of
-    // the weapon window is a real mesh, and every unarmed character would
-    // carry it.
-    if (slot >= LookSlot::Main && modelId == 0)
+    if (slot >= LookSlot::Main)
     {
-        return 0;
+        // An empty hand. Zero is a real model everywhere else - face 0 is a
+        // face - but no weapon in the item table has model zero, so for a
+        // weapon it can only mean nothing is held. Without this the file at
+        // the foot of the weapon window is a real mesh, and every unarmed
+        // character would carry it.
+        if (modelId == 0)
+        {
+            return 0;
+        }
+
+        // Off by default: the model resolves and draws, but it lands near the
+        // feet rather than sheathed at the hip. The mesh is rigidly skinned to
+        // a socket bone (5 on a hume male), and that socket's own animation
+        // channel is identity in the idle - idl1's track for bone 5 is a zero
+        // translation and an identity rotation - so the weapon is placed by
+        // the socket's bind frame alone, which sits at the origin. There is an
+        // attach offset we have not decoded yet; the skeleton's @tr0/@tl0
+        // (type 0x07, "attach right/left") chunks are the prime suspect.
+        //
+        // MOGHOUSE_WEAPONS=1 turns them on to keep working on it. The model
+        // windows themselves are solved (docs/wiki/Weapon-Models.md); only the
+        // placement is not.
+        static const bool weaponsEnabled = std::getenv("MOGHOUSE_WEAPONS") != nullptr;
+        if (!weaponsEnabled)
+        {
+            return 0;
+        }
     }
 
     return base + offset + modelId;
