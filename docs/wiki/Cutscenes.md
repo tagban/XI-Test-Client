@@ -122,6 +122,38 @@ know is *which* id, and when, because that is chosen by the bytecode. This is
 the precise shape of the remaining gap: not the text, not the transport, just
 the opcode that names a message.
 
+### The run loop and the per-actor dispatch
+
+`FUN_10096650` is the event system's per-frame driver. It picks up a queued
+event (from `DAT_104dfdd8 + 0x40d90`) and calls the start `FUN_100aed10`; while
+one is running it calls the init `FUN_100aea50` until it reports done, then
+walks the actor list and dispatches each active actor through a virtual method,
+`FUN_100973c0` -> `(*(actor+0xa0)->vtable[0x30])(...)`.
+
+**That virtual method is where the opcode stepping lives, and it is a virtual
+call.** Resolving it means resolving the class of the object at `actor+0xa0`
+and its vtable - another object-system layer - which is why the opcode set is
+not in reach from the event module alone. This is the exact spot the next dive
+starts from, rather than re-deriving the surrounding system.
+
+### The bytecode, as it really sits in the file
+
+Dumped and confirmed against a live zone file (S. Sandoria, `5820+230`):
+
+```
+file:   count(u32), then count lengths(u32), then that many blocks back to back
+block:  entityId(u32), capacity(u32), one u16, then the index and the code
+index:  capacity u16 offsets (the last is 0xFFFF), then capacity u16 event ids
+code:   event i is code[offset[i-1] .. offset[i]]; event 0 is a 1-byte placeholder
+```
+
+This is exactly what `FfxiEventTable` parses, now checked byte for byte. A real
+script begins with a `0x00` byte and then instruction-and-operand runs, e.g.
+`00 be 75 01 00 77 5e ff ff e8 03 00 00` - but the run lengths are set by the
+opcode table, so the bytes cannot be split into instructions until that table
+is decoded. That, and only that, is what stands between here and a cutscene
+that plays.
+
 ### The one layer left: the opcode VM
 
 The type-0x16 event task's own update is the bytecode interpreter - the switch
