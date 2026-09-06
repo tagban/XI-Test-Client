@@ -106,9 +106,12 @@ fn fragmentMain(in : WaterOut) -> @location(0) vec4<f32> {
     colour = mix(colour, uniforms.fogColour.rgb, fog);
 
     // Clear enough to see the bed through it, which is most of what makes water
-    // read as water rather than as a coloured lid.
-    // A sea hides its bed; a river shows it.
-    let alpha = clamp(mix(0.50, 0.88, sea) + foam * 0.22 + fresnel * 0.1 * sea, 0.0, 0.96);
+    // read as water rather than as a coloured lid. Valkurm's shallow bay shows
+    // its fish and its sand: a deep sea hides its bed only because the bed is
+    // too far down and too dark to show, not because the surface is a lid. So
+    // the sea is translucent too, held opaque enough that its teal survives the
+    // bright sand under it rather than washing back to grey.
+    let alpha = clamp(mix(0.50, 0.64, sea) + foam * 0.22 + fresnel * 0.1 * sea, 0.0, 0.9);
     return vec4<f32>(colour, alpha);
 }
 )";
