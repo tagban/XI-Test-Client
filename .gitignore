@@ -65,3 +65,4 @@ dist/
 # Harness build output
 /tools/loginzone/bin
 /tools/loginzone/obj
+*.unpacked.dll
