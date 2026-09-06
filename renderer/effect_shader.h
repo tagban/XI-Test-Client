@@ -63,7 +63,17 @@ fn vertexMain(@location(0) position : vec3<f32>,
     out.clipPosition = uniforms.viewProjection * world;
     out.normal = (model * vec4<f32>(normal, 0.0)).xyz;
     // eye.w carries the animation clock, in seconds.
-    out.uv = uv + effect.scroll.xy * uniforms.eye.w + effect.wave.xy;
+    //
+    // A wave (wave.w carries its z stretch, always at least one) tiles the
+    // foam texture along the strip: the geometry is stretched in z below the
+    // model's own uv, so without repeating the v the one copy of the texture
+    // smears the length of the strip. Multiplying v by the stretch repeats it
+    // that many times, which is what turns one sheet into a run of foam bands.
+    var localUv = uv;
+    if (effect.wave.w > 0.5) {
+        localUv.y = uv.y * effect.wave.w;
+    }
+    out.uv = localUv + effect.scroll.xy * uniforms.eye.w + effect.wave.xy;
     out.worldPosition = world.xyz;
     out.colour = colour;
     return out;

@@ -8476,10 +8476,15 @@ const float kWavePeriod = [] {
                     const char* set = std::getenv("MOGHOUSE_WAVE_GAIN");
                     return set ? std::strtof(set, nullptr) : 1.0f;
                 }();
+                // The strip's z stretch, wanted in two places: it scales the
+                // geometry below, and it goes to the shader so the foam texture
+                // tiles along the stretched strip rather than smearing one copy
+                // over it. It is always at least one for a wave, so it doubles
+                // as the shader's "this is foam" marker.
+                const float stretch = draw.wave.scaleZ.empty() ? 1.0f : at(draw.wave.scaleZ, 1.0f);
                 const float wave[4] = {at(draw.wave.u, 0.0f), at(draw.wave.v, 0.0f),
                                        std::min(at(draw.wave.opacity, 0.25f) * 4.0f * gain, 1.0f),
-                                       // Marks this draw a wave for the shader.
-                                       1.0f};
+                                       std::max(stretch, 1.0f)};
                 // MOGHOUSE_WAVE_WATCH=1 says, once, what each wave draw is and
                 // where its copies stand. A wave that is not on screen and a
                 // wave that is not being drawn look the same from the beach.
@@ -8539,7 +8544,7 @@ const float kWavePeriod = [] {
                 // against -112. Dividing by the extent (the old spreadPerUnit)
                 // shrank it to 0.68 and left the foam stranded out at sea; the
                 // long strip that reached the sand looked wrong and was right.
-                const float spread = at(draw.wave.scaleZ, 1.0f);
+                const float spread = stretch;
                 for (uint32_t n = 0; n < draw.instanceCount; ++n)
                 {
                     const size_t at16 = (static_cast<size_t>(draw.instanceOffset) + n) * 16;
