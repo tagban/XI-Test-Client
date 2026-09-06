@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstdlib>
+#include <cstdio>
 
 namespace mh
 {
@@ -314,17 +315,22 @@ std::vector<BonePose> animatedPose(const ffxi::Skeleton& skeleton, const ffxi::A
             float rotation[4];
             slerp(&track.rotation[first * 4], &track.rotation[second * 4], blend, rotation);
 
-            Vec3 translation{};
-            Vec3 scale{};
-            for (int c = 0; c < 3; ++c)
-            {
-                const float a = track.translation[first * 3 + c];
-                const float b = track.translation[second * 3 + c];
-                (&translation.x)[c] = a + (b - a) * blend;
-                const float sa = track.scale[first * 3 + c];
-                const float sb = track.scale[second * 3 + c];
-                (&scale.x)[c] = sa + (sb - sa) * blend;
-            }
+            // Blend one channel between the two straddling frames. Written
+            // out per component rather than as (&vec.x)[c]: punning the Vec3
+            // as a float array let the optimiser drop the writes to y and z -
+            // it did not see them as touching those members - so every
+            // animated translation silently kept only its x. Invisible while
+            // skeletal motion is almost all rotation; the weapon socket, which
+            // relies on a large translation channel to move from the origin to
+            // the hip, is the bone that exposed it.
+            const auto lerp = [&](const std::vector<float>& v, int c) {
+                const float a = v[first * 3 + c];
+                const float b = v[second * 3 + c];
+                return a + (b - a) * blend;
+            };
+            const Vec3 translation{lerp(track.translation, 0), lerp(track.translation, 1),
+                                   lerp(track.translation, 2)};
+            const Vec3 scale{lerp(track.scale, 0), lerp(track.scale, 1), lerp(track.scale, 2)};
 
             // The animation turns the bone from where it rests rather than
             // replacing it, and moves it from where it sits.
@@ -350,6 +356,7 @@ std::vector<BonePose> animatedPose(const ffxi::Skeleton& skeleton, const ffxi::A
     {
         applyClip(*overlay, overlayFrame);
     }
+
 
     std::vector<BonePose> pose(boneCount);
     for (size_t i = 0; i < boneCount; ++i)

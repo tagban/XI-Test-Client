@@ -1,6 +1,9 @@
 #include "mo2.h"
 
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string>
 #include <stdexcept>
 
 namespace ffxi

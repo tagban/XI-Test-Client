@@ -554,9 +554,15 @@ std::optional<LoadedCharacter> loadCharacter(const std::vector<std::string>& dat
                     {
                         if (track.bone == bone)
                         {
-                            std::printf("clip %s drives bone %u: %zu rotations, %zu translations\n",
-                                        animation.name.c_str(), bone, track.rotation.size() / 4,
-                                        track.translation.size() / 3);
+                            std::printf("clip %s drives bone %u: %zu frames; frame0 trans (%.3f %.3f %.3f) quat (%.3f %.3f %.3f %.3f)\n",
+                                        animation.name.c_str(), bone, track.translation.size() / 3,
+                                        track.translation.size() >= 3 ? track.translation[0] : 0.f,
+                                        track.translation.size() >= 3 ? track.translation[1] : 0.f,
+                                        track.translation.size() >= 3 ? track.translation[2] : 0.f,
+                                        track.rotation.size() >= 4 ? track.rotation[0] : 0.f,
+                                        track.rotation.size() >= 4 ? track.rotation[1] : 0.f,
+                                        track.rotation.size() >= 4 ? track.rotation[2] : 0.f,
+                                        track.rotation.size() >= 4 ? track.rotation[3] : 0.f);
                         }
                     }
                 }
@@ -10056,9 +10062,31 @@ const float kWavePeriod = [] {
                     const ffxi::Animation* upperClip = upperFor ? upperFor(playing) : nullptr;
                     const float upperFrame =
                         upperClip ? animationSeconds / upperClip->frameSeconds() : 0.0f;
-                    mh::reskin(character->geometry,
-                               mh::animatedPose(character->skeleton, *playing, frame, upperClip, upperFrame),
-                               character->meshes);
+                    const std::vector<mh::BonePose> pose =
+                        mh::animatedPose(character->skeleton, *playing, frame, upperClip, upperFrame);
+                    // MOGHOUSE_BONE_WORLD="4,5" prints where those bones ended up, once.
+                    if (const char* want = std::getenv("MOGHOUSE_BONE_WORLD"))
+                    {
+                        static bool printed = false;
+                        if (!printed)
+                        {
+                            printed = true;
+                            std::string list = want;
+                            for (size_t at = 0; at < list.size();)
+                            {
+                                size_t comma = list.find(',', at);
+                                if (comma == std::string::npos) comma = list.size();
+                                const int n = std::atoi(list.substr(at, comma - at).c_str());
+                                if (n >= 0 && n < static_cast<int>(pose.size()))
+                                {
+                                    std::printf("bone %d world (%.3f %.3f %.3f)\n", n, pose[n].translation.x,
+                                                pose[n].translation.y, pose[n].translation.z);
+                                }
+                                at = comma + 1;
+                            }
+                        }
+                    }
+                    mh::reskin(character->geometry, pose, character->meshes);
                     queue.WriteBuffer(characterVertexBuffer, 0, character->geometry.vertices.data(),
                                       character->geometry.vertices.size() * sizeof(mh::Vertex));
                 }
