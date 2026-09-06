@@ -8442,10 +8442,19 @@ const float kWavePeriod = [] {
                 // brightened one.
                 const bool wash = draw.wave.scaleZ.empty() && !draw.wave.opacity.empty();
                 const float stretch = draw.wave.scaleZ.empty() ? 1.0f : at(draw.wave.scaleZ, 1.0f);
+                // The reach multiplies the geometry stretch (the matrix scaling
+                // below). The foam texture tiles by the marker in the shader,
+                // so the marker has to carry the same total - stretch * reach -
+                // or the geometry is longer than the tiling and one copy of the
+                // texture smears the extra length into vertical streaks.
+                static const float reach = [] {
+                    const char* set = std::getenv("MOGHOUSE_WAVE_REACH");
+                    return set ? std::strtof(set, nullptr) : 1.0f;
+                }();
                 const float wave[4] = {at(draw.wave.u, 0.0f), at(draw.wave.v, 0.0f),
                                        wash ? at(draw.wave.opacity, 0.25f)
                                             : std::min(at(draw.wave.opacity, 0.25f) * 4.0f * gain, 1.0f),
-                                       wash ? -1.0f : std::max(stretch, 1.0f)};
+                                       wash ? -1.0f : std::max(stretch * reach, 1.0f)};
                 // MOGHOUSE_WAVE_WATCH=1 says, once, what each wave draw is and
                 // where its copies stand. A wave that is not on screen and a
                 // wave that is not being drawn look the same from the beach.
@@ -8518,17 +8527,12 @@ const float kWavePeriod = [] {
                 // against -112. Dividing by the extent (the old spreadPerUnit)
                 // shrank it to 0.68 and left the foam stranded out at sea; the
                 // long strip that reached the sand looked wrong and was right.
-                // MOGHOUSE_WAVE_REACH extends (or shortens) how far up the sand
-                // the foam runs. Op 0x29 scales each wave's own geometry, so a
-                // wave with a short strip (the raised nms, localZ ~4) reaches
-                // far less than a long one (the flat nmia, localZ 11.25) and its
-                // foam stops partway to the sand. A multiplier here lets the
-                // reach be tuned by eye until the foam wets the whole beach; 1.0
-                // is the geometry as the curve gives it.
-                static const float reach = [] {
-                    const char* set = std::getenv("MOGHOUSE_WAVE_REACH");
-                    return set ? std::strtof(set, nullptr) : 1.0f;
-                }();
+                // MOGHOUSE_WAVE_REACH (read above, where the tiling marker also
+                // uses it) extends how far up the sand the foam runs. Op 0x29
+                // scales each wave's own geometry, so a short strip (the raised
+                // nms, localZ ~4) reaches far less than a long one (nmia,
+                // localZ 11.25); the multiplier tunes it until the foam wets the
+                // whole beach.
                 const float spread = stretch * reach;
                 for (uint32_t n = 0; n < draw.instanceCount; ++n)
                 {
