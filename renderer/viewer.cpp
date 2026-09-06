@@ -1127,6 +1127,53 @@ bool isTriggeredEffectLibrary(const std::string& directory)
            directory.find("/fses") != std::string::npos;
 }
 
+/// The chat tabs, in the order they are drawn.
+///
+/// A tab is a filter on tone, not a separate log. `tone` is what it keeps; the
+/// All tab keeps everything and says so with a negative.
+///
+/// No Alliance tab. The server does not send one: its own message-area list
+/// has a single Party entry covering "Party and Alliance", so an alliance line
+/// arrives indistinguishable from a party line. A tab for it would be either
+/// permanently empty or an exact copy of Party, and both are worse than
+/// leaving it out until the protocol gives us something to split on.
+struct ChatTab
+{
+    const char* name;
+    int tone;   ///< the ChatTone it keeps, or -1 for everything
+};
+
+constexpr ChatTab kChatTabs[] = {
+    {"All", -1},
+    {"Say", static_cast<int>(mh::ChatTone::Say)},
+    {"Region", static_cast<int>(mh::ChatTone::Shout)},
+    {"Party", static_cast<int>(mh::ChatTone::Party)},
+    {"Ls", static_cast<int>(mh::ChatTone::Linkshell)},
+};
+
+/// Whether a line belongs on a tab.
+///
+/// A tell is shown on every tab. It is aimed at you personally, and a message
+/// you cannot see because you happened to be reading the linkshell is the one
+/// kind of loss a filter must not cause. Everything else - the system's
+/// narration included - is only on its own tab and on All, or the tabs filter
+/// nothing.
+bool onChatTab(int tab, mh::ChatTone tone)
+{
+    if (tab < 0 || tab >= static_cast<int>(std::size(kChatTabs)))
+    {
+        return true;
+    }
+    if (kChatTabs[tab].tone < 0 || tone == mh::ChatTone::Tell)
+    {
+        return true;
+    }
+
+    // An NPC talking is somebody speaking in the world, which is what Say is.
+    const int as = tone == mh::ChatTone::Npc ? static_cast<int>(mh::ChatTone::Say) : static_cast<int>(tone);
+    return as == kChatTabs[tab].tone;
+}
+
 /// Models a player is allowed to stand on, from assets/standable-models.txt.
 ///
 /// A flat list rather than a per-zone one: a bench is the same model wherever
@@ -5930,6 +5977,19 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
     bool equipmentOpen = std::getenv("MOGHOUSE_EQUIPMENT") != nullptr;
     int equipmentSlot = -1;
 
+    /// Which chat tab is showing. An index into kChatTabs.
+    ///
+    /// A view of the log rather than a second log: every line is kept whatever
+    /// tab is up, so switching tabs never loses anything and a tab that was
+    /// never opened still has its history when it is.
+    ///
+    /// MOGHOUSE_CHAT_TAB starts on one, so the filter can be looked at in a
+    /// screenshot without anybody pressing a key.
+    int chatTab = [] {
+        const char* start = std::getenv("MOGHOUSE_CHAT_TAB");
+        return start ? std::atoi(start) : 0;
+    }();
+
 
 
     // What was open last frame, so closing either panel can be noticed.
@@ -7757,6 +7817,17 @@ const float kWavePeriod = [] {
                             break;
                         }
                     }
+                }
+                else if ((event.key.key == SDLK_LEFTBRACKET || event.key.key == SDLK_RIGHTBRACKET) && driving)
+                {
+                    // Through the chat tabs, either way, wrapping at both ends.
+                    // A filter on the one log rather than a switch between
+                    // several, so nothing is lost by moving off a tab and
+                    // nothing has to be caught up on coming back to it.
+                    const int count = static_cast<int>(std::size(kChatTabs));
+                    chatTab += event.key.key == SDLK_RIGHTBRACKET ? 1 : count - 1;
+                    chatTab %= count;
+                    std::printf("chat tab: %s\n", kChatTabs[chatTab].name);
                 }
                 else if (event.key.key == SDLK_KP_MULTIPLY)
                 {
@@ -10778,7 +10849,8 @@ const float kWavePeriod = [] {
                             {
                                 const std::string kind = line.substr(0, bar);
                                 text = line.substr(bar + 1);
-                                if (kind == "shout") tone = mh::ChatTone::Shout;
+                                if (kind == "say") tone = mh::ChatTone::Say;
+                                else if (kind == "shout") tone = mh::ChatTone::Shout;
                                 else if (kind == "tell") tone = mh::ChatTone::Tell;
                                 else if (kind == "party") tone = mh::ChatTone::Party;
                                 else if (kind == "ls") tone = mh::ChatTone::Linkshell;
@@ -10789,6 +10861,28 @@ const float kWavePeriod = [] {
                             said.push_back({text, tone});
                         }
                     }
+                    // The tab, applied before wrapping so that the panel
+                    // fills with eight lines of what is being read rather than
+                    // eight lines of the whole log with most of them dropped.
+                    if (chatTab > 0)
+                    {
+                        std::vector<mh::ViewerLink::ChatLine> kept;
+                        for (const mh::ViewerLink::ChatLine& entry : said)
+                        {
+                            if (onChatTab(chatTab, entry.tone))
+                            {
+                                kept.push_back(entry);
+                            }
+                        }
+                        const bool wasSomething = !said.empty();
+                        said = std::move(kept);
+                        if (said.empty() && wasSomething)
+                        {
+                            said.push_back({std::string("Nothing on ") + kChatTabs[chatTab].name + " yet",
+                                            mh::ChatTone::System});
+                        }
+                    }
+
                     if (said.empty())
                     {
                         said.push_back({"Chat - waiting for the server", mh::ChatTone::System});
@@ -10850,6 +10944,7 @@ const float kWavePeriod = [] {
                     // a box reads as the chat window it is, and is what the
                     // retail client draws. The bars array draws it, after the
                     // vitals have taken their slots.
+                    float chatBoxLeft = 0.0f, chatBoxTop = 0.0f, chatBoxWide = 0.0f;
                     {
                         const float rowStep = line * 1.15f;
                         // Always room for the line you type into, whether or
@@ -10864,6 +10959,9 @@ const float kWavePeriod = [] {
                         const float boxBottom = -0.97f - padY;
                         const float boxWide = measure(std::string(mh::kHudChars, 'M'), 0.4f) * 0.62f + padX * 2.0f;
                         const float boxHigh = rowStep * rows + padY * 2.0f;
+                        chatBoxLeft = boxLeft;
+                        chatBoxTop = boxBottom + boxHigh;
+                        chatBoxWide = boxWide;
                         for (int bar = 0; bar < mh::kHudBars; ++bar)
                         {
                             if (hud.bars[bar][2] <= 0.0f)
@@ -10878,6 +10976,26 @@ const float kWavePeriod = [] {
                                 hud.barColours[bar][3] = 0.6f;
                                 break;
                             }
+                        }
+                    }
+
+                    // The tabs, in a row along the top edge of the panel.
+                    // The one being read is bright and the rest are dim, which
+                    // is the whole of the state - there is no second log to
+                    // show, only a filter on the one there is.
+                    {
+                        float tabX = chatBoxLeft + line * 0.5f / windowAspect;
+                        for (int t = 0; t < static_cast<int>(std::size(kChatTabs)); ++t)
+                        {
+                            const std::string label = kChatTabs[t].name;
+                            const float wide = measure(label, 0.34f) * 0.62f;
+                            if (tabX + wide > chatBoxLeft + chatBoxWide)
+                            {
+                                break;
+                            }
+                            place(label, tabX, chatBoxTop + line * 0.15f, 0.34f,
+                                  t == chatTab ? kHudBright : kHudDim, 0.0f, false);
+                            tabX += wide + line * 1.4f / windowAspect;
                         }
                     }
 
