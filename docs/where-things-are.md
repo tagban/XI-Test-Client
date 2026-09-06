@@ -51,6 +51,26 @@ Two accounts, both `mhtestpw123`: `mhtest` (character Testy) and `mhtest2`
 (Duo). A character that was logged in less than a minute ago cannot log in
 again - the server holds the session for sixty seconds.
 
+## Commands in the world
+
+Typed with a leading `/`; anything not recognised is said out loud.
+
+| command | does |
+|---|---|
+| `/attack` (`/at`, `/engage`) | engage the current target - draws the weapon and sends the engage action; the server drives the fight |
+| `/attackoff` (`/disengage`) | stop attacking and sheathe |
+| `/draw` (`/sheathe`) | a local toggle: ready or sheathe the weapon with no server and no target, for looking at the stance |
+| `/sit`, `/stand` | sit down / stand up; walking stands you up too |
+| `/logout`, `/shutdown` | leave to the character list / end the session |
+| `/bug <words>` | file a bug from where you stand - see below |
+| `/say`, `/shout`, `/tell`, `/party`, `/linkshell` (and the short forms) | chat channels |
+
+Weapons are drawn by default. `MOGHOUSE_DRAW_CLIP` overrides which clip the
+drawn stance uses while the right per-weapon-type battle idle is pinned down.
+Enter-twice-on-a-target to engage (the retail way in) is not wired yet; `/attack`
+is the way in meanwhile. Shields, dual-wield and ranged sit in the wrong place
+still - only the main-hand weapon is placed correctly; see the weapon notes.
+
 ## Reporting what is wrong
 
 `/bug the torch is not lit` from inside the world writes the words, the zone,
