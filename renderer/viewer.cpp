@@ -510,6 +510,26 @@ std::optional<LoadedCharacter> loadCharacter(const std::vector<std::string>& dat
                 ffxi::SkinnedModel model = ffxi::parseOs2(chunk);
                 if (!model.parts.empty())
                 {
+                    // Which bones a piece hangs on. A weapon is one bone - the
+                    // hand - and which bone that is differs per race, so this
+                    // is how to see whether a piece landed where it should.
+                    if (std::getenv("MOGHOUSE_SKIN_BONES"))
+                    {
+                        std::set<int> bones;
+                        for (const ffxi::SkinVertex& vertex : model.vertices)
+                        {
+                            for (uint8_t i = 0; i < vertex.influences && i < 2; ++i)
+                            {
+                                bones.insert(static_cast<int>(vertex.influence[i].bone));
+                            }
+                        }
+                        std::printf("skin %.4s: %zu vertices on bones", chunk.id, model.vertices.size());
+                        for (int bone : bones)
+                        {
+                            std::printf(" %d", bone);
+                        }
+                        std::printf("\n");
+                    }
                     meshes.push_back(std::move(model));
                 }
             }
@@ -527,6 +547,19 @@ std::optional<LoadedCharacter> loadCharacter(const std::vector<std::string>& dat
             try
             {
                 ffxi::Animation animation = ffxi::parseMo2(chunk);
+                if (const char* want = std::getenv("MOGHOUSE_TRACK_BONE"))
+                {
+                    const uint32_t bone = static_cast<uint32_t>(std::atoi(want));
+                    for (const ffxi::AnimationTrack& track : animation.tracks)
+                    {
+                        if (track.bone == bone)
+                        {
+                            std::printf("clip %s drives bone %u: %zu rotations, %zu translations\n",
+                                        animation.name.c_str(), bone, track.rotation.size() / 4,
+                                        track.translation.size() / 3);
+                        }
+                    }
+                }
                 loaded.animations.insert_or_assign(animation.name, std::move(animation));
             }
             catch (const std::exception&)
