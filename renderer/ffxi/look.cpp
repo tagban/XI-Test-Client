@@ -125,39 +125,14 @@ size_t modelFileId(Race race, LookSlot slot, uint16_t modelId)
         return 0;
     }
 
-    if (slot >= LookSlot::Main)
+    // An empty hand. Zero is a real model everywhere else - face 0 is a
+    // face - but no weapon in the item table has model zero, so for a weapon
+    // it can only mean nothing is held. Without this the file at the foot of
+    // the weapon window is a real mesh, and every unarmed character would
+    // carry it.
+    if (slot >= LookSlot::Main && modelId == 0)
     {
-        // An empty hand. Zero is a real model everywhere else - face 0 is a
-        // face - but no weapon in the item table has it, so for a weapon it
-        // can only mean nothing is held. Without this the file at the foot of
-        // the window is a real mesh, and every unarmed character walks around
-        // holding it.
-        if (modelId == 0)
-        {
-            return 0;
-        }
-
-        // Off by default, because the weapon does not end up in the hand yet.
-        //
-        // The file is right and the mesh loads - a bronze sword adds its 92
-        // triangles to the character - but it draws at the character's feet.
-        // It is skinned to exactly one bone, 5 on a hume male, which is one of
-        // the handful near the root whose bind transform is all zeros; those
-        // look like attachment points rather than body bones. Every clip whose
-        // name ends in 1 - the upper-body half - drives bone 5, sixty-nine of
-        // them, so the bone is animated and the weapon still does not move,
-        // which says the weapon file's bone numbering is not the skeleton's.
-        // Mapping one onto the other is the open question, and it is the same
-        // shape as the one docs/wiki/Skeletons.md answers for the head: find
-        // the bone by what it is, not by its index.
-        //
-        // MOGHOUSE_WEAPONS=1 turns them on to keep working on it. Until then a
-        // sword lying on the floor beside its owner is worse than no sword.
-        static const bool weaponsEnabled = std::getenv("MOGHOUSE_WEAPONS") != nullptr;
-        if (!weaponsEnabled)
-        {
-            return 0;
-        }
+        return 0;
     }
 
     return base + offset + modelId;
