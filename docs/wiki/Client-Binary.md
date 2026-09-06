@@ -87,6 +87,41 @@ No Windows, no debugger and no runtime memory dump are needed, which is worth
 saying because all three are the usual answer to a packed binary and none of
 them is necessary here.
 
+## What is in there: the engine is called "dancer"
+
+The unpacked binary carries the source paths of its own memory allocation
+sites - `free(pointer, file, line)` keeps the file and line - so the engine's
+module layout is readable without any guessing. It is a middleware engine
+called **dancer**, built from `sq*` modules:
+
+| module | files seen | what it is |
+|---|---|---|
+| `sqOpcode` | `sqopOpcode.c`, `sqopTrack.c`, `sqopSystem.c` | almost certainly the `0x21`-`0x2f` block in [Effect Generators](Effect-Generators.md) |
+| `sqXform` | `sqxfXformTD.c`, `sqxfXformM.c` | transforms - where a placement is composed |
+| `sqSkeleton` | `sqskSkeleton.c`, `sqskJoint.c` | bones; see [Skeletons](Skeletons.md) |
+| `sqSkin` | `sqinSkin.c`, `sqinBuild.c` | skinning - where a weapon's bone gets resolved |
+| `sqMotion` | `sqmoChannel.c`, `sqmoKeyChannel.c`, `sqmoMixerMotion.c`, … | animation channels and the mixer |
+| `sqModel` | `sqmdModel.c`, `sqmdIO.c`, `sqmdDMB.c`, `sqmdScript.c`, `sqmdSnap.c` | models, and a script system |
+| `sqHierarchy` | `sqhiNode.c` | the node tree a transform inherits through |
+| `sqScene`, `sqRend`, `sqShape`, `sqShader`, `sqGrafix` | many | scene, camera, lights, materials, DX8 back end |
+| `sqBase` | `sqMatrix4.c`, `sqMatrix3.c`, `sqQuat.c`, `sqVtx.c`, `sqArray.c` | the maths and containers |
+| `sqImage` | `sqimImageTM2.c`, `TIFF`, `SGI`, `PPM` | image formats - TM2 is the PS2 lineage showing |
+| `sqConstraint` | `sqcoConnector.c` | constraints and connectors |
+
+The game's own layer sits above it as `D:\build0001\FFXi_Win\Main\...`, with
+a `dancer/` subdirectory of adapters (`StModel.cpp`, `StChannel.cpp`,
+`StTrigger.cpp`, `StAvatar.cpp`), and its classes are the `CMo*` and `CXi*`
+names in the RTTI - `CMoResourceMng`, `CMoGeneratorClone`, `CXiDancerActor`.
+
+Two consequences worth knowing before hunting anything:
+
+- **Module code is contiguous.** An allocation site pins a module to an address
+  neighbourhood, and the rest of that compilation unit is around it. `sqOpcode`
+  is near `0x10289xxx`.
+- **Most of these calls are through vtables**, so a function with no callers is
+  normal rather than dead. Walking outward from a caller list stops early;
+  walking from RTTI to a vtable to its methods does not.
+
 ## Keep the output out of the repository
 
 The rebuilt DLL is derived from a proprietary binary. `*.unpacked.dll` is in
