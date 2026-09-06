@@ -663,6 +663,12 @@ public:
     void requestTalk(uint32_t entityId);
     bool takeTalk(uint32_t& entityId);
 
+    /// The entity the player currently has selected, or 0. Mirrored out of the
+    /// renderer so the client can act on it - /attack engages whatever this
+    /// is, the way pressing the attack key on a target does.
+    void setTarget(uint32_t entityId);
+    uint32_t target() const;
+
     /// The id posted when escape is pressed while the character line-up is up.
     ///
     /// Backing out of character select had no route at all: the line-up is
@@ -841,6 +847,16 @@ public:
     void setSitting(bool sitting);
     bool sitting() const;
 
+    /// Whether the weapon is drawn - the engaged battle stance.
+    ///
+    /// Its own state, like sitting: the server drives whether you are actually
+    /// attacking, but which pose to show is the client's, and it is held
+    /// rather than sent. Set by engaging (/attack, or the server's engaged
+    /// flag) and by the local /draw, which draws the weapon without a fight to
+    /// pick one.
+    void setDrawn(bool drawn);
+    bool drawn() const;
+
     void setPlayerName(std::string name);
     std::string playerName() const;
 
@@ -974,6 +990,8 @@ private:
     std::string playerName_;
     std::atomic<bool> resting_{false};
     std::atomic<bool> sitting_{false};
+    std::atomic<bool> drawn_{false};
+    std::atomic<uint32_t> target_{0};
     std::string look_;
     bool lookChanged_{false};
     std::atomic<bool> lineup_{false};

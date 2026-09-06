@@ -31,6 +31,23 @@ public enum FfxiClientCommandKind
     Stand,
 
     /// <summary>
+    /// Engage the current target - start attacking. The server drives the
+    /// fight; the client sends the action and shows the drawn stance. Retail
+    /// also does this on a second Enter with an attackable target selected.
+    /// </summary>
+    Engage,
+
+    /// <summary>Disengage - stop attacking and sheathe.</summary>
+    Disengage,
+
+    /// <summary>
+    /// Draw or sheathe the weapon without engaging anything - a purely local
+    /// pose, for seeing the drawn stance without a mob to fight. Not a retail
+    /// command; a convenience.
+    /// </summary>
+    Draw,
+
+    /// <summary>
     /// Report something wrong, from where it is wrong.
     ///
     /// The words are the easy half. What makes a report worth having is the
@@ -116,6 +133,9 @@ public static class FfxiClientCommands
             // is the way back out for somebody who would rather type it than
             // walk, which is how the real client does it too.
             "sit" or "sitchair" => new FfxiClientCommand(FfxiClientCommandKind.Sit, name, rest),
+            "attack" or "at" or "engage" => new FfxiClientCommand(FfxiClientCommandKind.Engage, name, rest),
+            "attackoff" or "disengage" => new FfxiClientCommand(FfxiClientCommandKind.Disengage, name, rest),
+            "draw" or "unsheathe" or "sheathe" => new FfxiClientCommand(FfxiClientCommandKind.Draw, name, rest),
             "stand" => new FfxiClientCommand(FfxiClientCommandKind.Stand, name, rest),
 
             "tell" or "t" or "whisper" or "w" or "send" => Whisper(name, rest),

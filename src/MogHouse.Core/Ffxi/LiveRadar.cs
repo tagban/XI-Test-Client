@@ -488,6 +488,19 @@ public sealed class LiveRadar : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the weapon is drawn - the engaged battle stance. Its own state,
+    /// like sitting; movement does not clear it, because a character walks with
+    /// the weapon out while engaged.
+    /// </summary>
+    public void ShowDrawn(bool drawn)
+    {
+        if (!_closed)
+        {
+            _viewer.SetDrawn(drawn);
+        }
+    }
+
     /// <summary>The character's job, level and stats.</summary>
     public void ShowCharacterStats(NativeCharacterStats stats)
     {
@@ -666,6 +679,9 @@ public sealed class LiveRadar : IDisposable
 
     /// <summary>Who the player asked to talk to this frame, or 0.</summary>
     public uint TakeTalk() => _viewer.TakeTalk();
+
+    /// <summary>The entity the player currently has selected, or 0.</summary>
+    public uint CurrentTarget() => _closed ? 0 : _viewer.CurrentTarget();
 
     /// <summary>
     /// Puts the death box up, or takes it down, and says whether its second

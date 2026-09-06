@@ -396,6 +396,19 @@ void mh_viewer_set_sitting(MhViewerHandle viewer, int32_t sitting)
     }
 }
 
+void mh_viewer_set_drawn(MhViewerHandle viewer, int32_t drawn)
+{
+    if (viewer)
+    {
+        viewer->link.setDrawn(drawn != 0);
+    }
+}
+
+uint32_t mh_viewer_current_target(MhViewerHandle viewer)
+{
+    return viewer ? viewer->link.target() : 0;
+}
+
 void mh_viewer_set_character_stats(MhViewerHandle viewer, const MhCharacterStats* stats)
 {
     if (!viewer || !stats)

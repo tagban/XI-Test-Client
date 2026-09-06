@@ -531,6 +531,25 @@ public sealed partial class NativeViewer : IDisposable
     [LibraryImport(LibraryName)]
     private static partial void mh_viewer_set_sitting(IntPtr viewer, int sitting);
 
+    /// <summary>Whether the weapon is drawn - the engaged battle stance.</summary>
+    public void SetDrawn(bool drawn)
+    {
+        if (!_disposed)
+        {
+            mh_viewer_set_drawn(_handle, drawn ? 1 : 0);
+        }
+    }
+
+    [LibraryImport(LibraryName)]
+    private static partial void mh_viewer_set_drawn(IntPtr viewer, int drawn);
+
+    /// <summary>The entity the player currently has selected, or 0.</summary>
+    public uint CurrentTarget() =>
+        _disposed || _handle == IntPtr.Zero ? 0 : mh_viewer_current_target(_handle);
+
+    [LibraryImport(LibraryName)]
+    private static partial uint mh_viewer_current_target(IntPtr viewer);
+
     /// <summary>The character's job, level and stats, for the equipment screen.</summary>
     public void SetCharacterStats(NativeCharacterStats stats)
     {

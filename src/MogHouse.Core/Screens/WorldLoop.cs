@@ -45,6 +45,7 @@ public sealed class WorldLoop
 
     private uint _openZone;
     private bool _leaving;
+    private bool _drawn;
 
     /// <summary>Why the world was left, once it has been.</summary>
     public WorldExit Exit { get; private set; } = WorldExit.WindowClosed;
@@ -604,6 +605,46 @@ public sealed class WorldLoop
                 _world.ShowSitting(false);
                 _world.Say(null, "You stand up.");
                 return;
+
+            // A local pose, no server and no target: draw or sheathe the
+            // weapon to see the battle stance. /attack is the real engage;
+            // this is the quiet version for looking at your gear.
+            case FfxiClientCommandKind.Draw:
+                _drawn = !_drawn;
+                _world.ShowDrawn(_drawn);
+                _world.Say(null, _drawn ? "You ready your weapon." : "You put your weapon away.");
+                return;
+
+            // Engage the current target - start attacking. The server drives
+            // the fight; here we send the action and show the drawn stance.
+            case FfxiClientCommandKind.Engage:
+            {
+                uint targetId = _world.CurrentTarget();
+                if (targetId == 0 || _tracker.Find(targetId) is not { } foe)
+                {
+                    _world.Say(null, "You have no target.");
+                    return;
+                }
+
+                _drawn = true;
+                _world.ShowDrawn(true);
+                _world.Say(null, $"You engage {(string.IsNullOrEmpty(foe.Name) ? "the target" : foe.Name)}.");
+                Wait(_session.EngageAsync(targetId, foe.ActIndex));
+                return;
+            }
+
+            case FfxiClientCommandKind.Disengage:
+            {
+                _drawn = false;
+                _world.ShowDrawn(false);
+                _world.Say(null, "You disengage.");
+                // Disengage targets our own character; the session fills that in.
+                if (_world.CurrentTarget() is uint t && t != 0 && _tracker.Find(t) is { } foe)
+                {
+                    Wait(_session.DisengageAsync(t, foe.ActIndex));
+                }
+                return;
+            }
 
             // Every channel the real client answers to, and the short forms
             // nobody types the long version of: /s /sh /y /p /l /ls /l2 /u /em.

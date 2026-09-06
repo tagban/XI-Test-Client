@@ -28,6 +28,18 @@ public static class FfxiActionPacket
     public const ushort ActionTalk = 0x00;
 
     /// <summary>
+    /// Start attacking the target - "engage". The server turns to face the
+    /// mob, closes to melee, and swings on its own timer from then on; the
+    /// client's part is this one packet and then showing the drawn-weapon
+    /// stance. Retail sends it when you press Enter twice on an attackable
+    /// target, and /attack is the same thing.
+    /// </summary>
+    public const ushort ActionEngage = 0x02;
+
+    /// <summary>Stop attacking - "disengage". Sheathes the weapon. /attackoff.</summary>
+    public const ushort ActionDisengage = 0x04;
+
+    /// <summary>
     /// Answer the menu a dead character gets. The buffer's StatusId picks
     /// which answer and Accept is zero, so a zeroed buffer is 'yes, send me
     /// to my home point'.
@@ -67,4 +79,12 @@ public static class FfxiActionPacket
         // The union, left zeroed: talking carries no arguments.
         return packet;
     }
+
+    /// <summary>Engage the target - <see cref="ActionEngage"/>.</summary>
+    public static byte[] BuildEngage(uint uniqueNo, ushort actIndex, ushort sync) =>
+        Build(uniqueNo, actIndex, ActionEngage, sync);
+
+    /// <summary>Disengage - <see cref="ActionDisengage"/>. The target is our own.</summary>
+    public static byte[] BuildDisengage(uint uniqueNo, ushort actIndex, ushort sync) =>
+        Build(uniqueNo, actIndex, ActionDisengage, sync);
 }

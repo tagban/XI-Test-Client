@@ -1346,6 +1346,33 @@ public sealed class FfxiGameSession : IDisposable
     }
 
     /// <summary>
+    /// Engage the target - start attacking it. The server does the rest: it
+    /// turns us to face the mob, closes to melee and swings on its own timer.
+    /// Our part is this packet and the drawn-weapon stance the renderer shows
+    /// once the server confirms we are engaged.
+    /// </summary>
+    public async Task EngageAsync(uint uniqueNo, ushort actIndex)
+    {
+        if (_zone is null || _zoneEndpoint is null)
+        {
+            return;
+        }
+
+        await _zone.SendActionAsync(_zoneEndpoint, uniqueNo, actIndex, FfxiActionPacket.ActionEngage);
+    }
+
+    /// <summary>Disengage - stop attacking and sheathe. The target is our own.</summary>
+    public async Task DisengageAsync(uint uniqueNo, ushort actIndex)
+    {
+        if (_zone is null || _zoneEndpoint is null)
+        {
+            return;
+        }
+
+        await _zone.SendActionAsync(_zoneEndpoint, uniqueNo, actIndex, FfxiActionPacket.ActionDisengage);
+    }
+
+    /// <summary>
     /// Accepts the home point after dying, which is the only way back up.
     ///
     /// A character at zero HP is not going anywhere on their own: the server

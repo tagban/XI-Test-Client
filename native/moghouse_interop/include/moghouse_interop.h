@@ -215,6 +215,8 @@ MH_API void mh_viewer_set_resting(MhViewerHandle viewer, int32_t resting);
 /// resting: resting is something the server puts you in, sitting is a pose you
 /// choose and leave by walking out of.
 MH_API void mh_viewer_set_sitting(MhViewerHandle viewer, int32_t sitting);
+MH_API void mh_viewer_set_drawn(MhViewerHandle viewer, int32_t drawn);
+MH_API uint32_t mh_viewer_current_target(MhViewerHandle viewer);
 
 /// The character's job, level and stats, for the equipment screen.
 ///

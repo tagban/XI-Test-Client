@@ -2663,6 +2663,10 @@ bool mh::ViewerLink::takeJump() { return jump_.exchange(false); }
 
 void mh::ViewerLink::requestTalk(uint32_t entityId) { talk_ = entityId; }
 
+void mh::ViewerLink::setTarget(uint32_t entityId) { target_ = entityId; }
+
+uint32_t mh::ViewerLink::target() const { return target_.load(); }
+
 void mh::ViewerLink::setWeather(int32_t weather) { weather_ = weather; }
 
 void mh::ViewerLink::requestCapture(const std::string& path)
@@ -2869,6 +2873,10 @@ void mh::ViewerLink::setResting(bool resting) { resting_ = resting; }
 void mh::ViewerLink::setSitting(bool sitting) { sitting_ = sitting; }
 
 bool mh::ViewerLink::sitting() const { return sitting_; }
+
+void mh::ViewerLink::setDrawn(bool drawn) { drawn_ = drawn; }
+
+bool mh::ViewerLink::drawn() const { return drawn_; }
 
 bool mh::ViewerLink::resting() const { return resting_; }
 
@@ -6555,6 +6563,7 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
     const ffxi::Animation* playing = nullptr;
     const ffxi::Animation* idleClip = nullptr;
     const ffxi::Animation* sitClip = nullptr;
+    const ffxi::Animation* drawClip = nullptr;
     const ffxi::Animation* walkClip = nullptr;
     const ffxi::Animation* runClip = nullptr;
     const ffxi::Animation* jumpClip = nullptr;
@@ -6597,6 +6606,11 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
         // down and left you standing. upperFor turns the trailing 0 into a 1,
         // so si11 comes along on its own.
         sitClip = find("si10");
+        // std0 is the standing-with-weapon-drawn pose - the engaged battle
+        // stance - as opposed to idl0, which stands with the weapon sheathed.
+        // MOGHOUSE_DRAW_CLIP overrides it while the right stance per weapon
+        // type is still being worked out.
+        drawClip = find(std::getenv("MOGHOUSE_DRAW_CLIP") ? std::getenv("MOGHOUSE_DRAW_CLIP") : "std0");
         if (character && !character->animations.empty() && !sitClip)
         {
             std::printf("no sitting clip (si10) on this body; /sit will do nothing\n");
@@ -9020,9 +9034,14 @@ const float kWavePeriod = [] {
             // still beats both: the server will not let a resting character go
             // anywhere, so if all three look true the rest is the honest one.
             const bool satDown = link && link->sitting() && sitClip && moved <= 1e-4f;
+            // Standing still with the weapon drawn shows the battle stance
+            // rather than the sheathed idle. Movement still wins - you walk
+            // and run the same whether or not the weapon is out.
+            const ffxi::Animation* standClip =
+                link && link->drawn() && drawClip ? drawClip : idleClip;
             const ffxi::Animation* wanted = link && link->resting() && restClip ? restClip
                                             : satDown                          ? sitClip
-                                            : (moved > 1e-4f ? moving : idleClip);
+                                            : (moved > 1e-4f ? moving : standClip);
             if (wanted && wanted != playing)
             {
                 playing = wanted;
@@ -9037,6 +9056,7 @@ const float kWavePeriod = [] {
         // up the thread feeding it.
         if (link)
         {
+            link->setTarget(targetId);
             radarEntities = link->entities();
 
             // Character select: the people on the account standing in the
