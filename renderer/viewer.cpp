@@ -1887,7 +1887,16 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
         //
         // MOGHOUSE_WAVES=1 turns them on to keep working on it.
         static const bool wavesEnabled = std::getenv("MOGHOUSE_WAVES") != nullptr;
-        const bool wave = wavesEnabled && water && !effect.scaleZCurve.empty();
+        // A wave is a generator that carries op 0x29 (the scaleZ curve) in a
+        // sea directory. It used to also require isWaterMesh, which keys on the
+        // untextured sheet names - so only nmia/nmib (the flat strips furthest
+        // out, "tex -") qualified, while the raised nms and nmk waves closer to
+        // shore, which carry the same 0x29 curve but are textured (tma*), were
+        // dropped to plain scrolling effects and never rolled. The sea
+        // directory (f_ki/effe/umi1..3, "umi" = the sea) is the honest test:
+        // anything there with a scaleZ curve is a wave whatever its texture.
+        const bool seaDirectory = effect.directory.find("umi") != std::string::npos;
+        const bool wave = wavesEnabled && !effect.scaleZCurve.empty() && (water || seaDirectory);
         if (wave)
         {
             water = false;
