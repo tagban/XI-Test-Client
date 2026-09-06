@@ -12037,6 +12037,27 @@ const float kWavePeriod = [] {
                                 continue;
                             }
 
+                            // Already being worn, so not something to put on.
+                            // One sword is one sword: a one-handed blade names
+                            // both hands in its slot mask, so without this the
+                            // sub-hand list offers the sword already in the
+                            // main hand and clicking it asks for the same item
+                            // in two places at once. Taking it off is what the
+                            // Remove button is for.
+                            bool alreadyWorn = false;
+                            for (const std::pair<uint8_t, uint8_t>& at : worn)
+                            {
+                                if (at.second != 255 && at.first == entry.container && at.second == entry.slot)
+                                {
+                                    alreadyWorn = true;
+                                    break;
+                                }
+                            }
+                            if (alreadyWorn)
+                            {
+                                continue;
+                            }
+
                             // Where this row would go. The chosen slot when
                             // there is one, otherwise the lowest the item
                             // names - a ring names two and either will do,
