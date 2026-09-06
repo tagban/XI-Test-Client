@@ -31,16 +31,15 @@ struct WaveCurves
     std::string opacity; ///< op 0x2d
     std::string u;       ///< op 0x2e, an offset in uv, not a rate
     std::string v;       ///< op 0x2f
-    /// Turns a scaleZ curve value into a model scale: one over the model's own
-    /// z extent.
     ///
-    /// The curve is a size, not a factor. nmia is 11.25 deep and its scaleZ
-    /// curve reaches 7.70; multiplied it gives a strip 87 units deep, which
-    /// covers the bay - the three shoreline features of one beach stand five
-    /// to seven units apart. Read as a size it gives a strip 7.70 deep, and
-    /// the model's z bounds start at zero, so the strip grows from its own
-    /// seaward edge and its far edge runs up the sand.
-    float spreadPerUnit{1.0f};
+    /// scaleZ (op 0x29) is a factor on the strip's own z scale, not a target
+    /// size. nmia is 11.25 deep with its z bounds starting at zero, so it grows
+    /// from its seaward edge; the curve peaks at 7.70, which stretches it to 87
+    /// units and runs the far edge exactly up to the waterline - measured on
+    /// both Valkurm beaches, the strip anchor plus 86.6 landing within two
+    /// units of where the terrain meets the sea. An earlier reading took the
+    /// curve as a size and divided it by the extent, which shrank the strip to
+    /// a fraction of a unit and stranded the foam out at sea.
     bool any() const { return !scaleZ.empty() || !opacity.empty() || !u.empty() || !v.empty(); }
 };
 

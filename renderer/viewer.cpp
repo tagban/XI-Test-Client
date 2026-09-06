@@ -1824,6 +1824,21 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
             continue;
         }
         const std::string& modelName = *resolved;
+        if (std::getenv("MOGHOUSE_GEN_WATCH"))
+        {
+            // The resolved model's own local bounds, to see which way a strip
+            // extends from its origin and how big it is before the placement.
+            float lo[3] = {1e9f,1e9f,1e9f}, hi[3] = {-1e9f,-1e9f,-1e9f};
+            auto mit = models.find(modelName);
+            if (mit != models.end())
+                for (const ffxi::ModelMesh& m : mit->second.meshes)
+                    for (const ffxi::ModelVertex& v : m.vertices)
+                        for (int c=0;c<3;++c){ lo[c]=std::min(lo[c],v.position[c]); hi[c]=std::max(hi[c],v.position[c]); }
+            std::printf("gen %-6s pos %8.2f %8.2f %8.2f  scale %.2f %.2f %.2f  localZ %.2f..%.2f localX %.2f..%.2f  dir %s\n",
+                        effect.modelId.c_str(), effect.translate[0], effect.translate[1], effect.translate[2],
+                        effect.scale[0], effect.scale[1], effect.scale[2], lo[2], hi[2], lo[0], hi[0],
+                        effect.directory.c_str());
+        }
         auto model = models.find(modelName);
         if (model == models.end())
         {
@@ -2005,8 +2020,6 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
                 params.wave.opacity = effect.opacityCurve;
                 params.wave.u = effect.uCurve;
                 params.wave.v = effect.vCurve;
-                const float zExtent = model->second.boundsMax[2] - model->second.boundsMin[2];
-                params.wave.spreadPerUnit = zExtent > 0.01f ? 1.0f / zExtent : 1.0f;
                 if (std::getenv("MOGHOUSE_WAVE_WATCH"))
                 {
                     std::printf("wave setup %-4s generator says %8.2f %8.2f %8.2f   model z bounds %.2f..%.2f\n",
@@ -8517,9 +8530,16 @@ const float kWavePeriod = [] {
                 {
                     continue;
                 }
-                // The curve is the depth the strip should reach, in the same
-                // units its own bounds are in - not a factor to multiply by.
-                const float spread = at(draw.wave.scaleZ, 1.0f) * draw.wave.spreadPerUnit;
+                // Op 0x29 is a scale factor on the strip's own z, not a
+                // target depth: at its peak of 7.70 it multiplies the strip's
+                // 11.25-unit geometry to 86.6 world units, which carries the
+                // shoreward edge from the strip's anchor exactly to the
+                // waterline - measured at both Valkurm beaches, -237.3+86.6 =
+                // -150.7 against a shore at -152, and -197.3+86.6 = -110.7
+                // against -112. Dividing by the extent (the old spreadPerUnit)
+                // shrank it to 0.68 and left the foam stranded out at sea; the
+                // long strip that reached the sand looked wrong and was right.
+                const float spread = at(draw.wave.scaleZ, 1.0f);
                 for (uint32_t n = 0; n < draw.instanceCount; ++n)
                 {
                     const size_t at16 = (static_cast<size_t>(draw.instanceOffset) + n) * 16;
