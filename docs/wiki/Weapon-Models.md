@@ -73,37 +73,73 @@ animators and soultrappers, which the server's table simply has no model for.
 Without this rule the file at the foot of the window is a real mesh and every
 unarmed character carries it.
 
-## What does not work yet
+## How a weapon reaches the hand
 
-The file is right and the mesh loads. A bronze sword - model 268, so file
-`race base + 1320 + 268` - adds its 92 triangles to the character, and the
-count goes from five meshes to six.
+A weapon has no attachment code of its own, and it needs none. The `wep0`
+mesh is a skinned mesh like any armour piece, skinned to a single bone - a
+*socket* the skeleton carries for exactly this.
 
-**It draws at the character's feet rather than in the hand.**
+Reading the bronze sword's `wep0` header:
 
-A weapon is skinned to exactly one bone: 5, on a hume male. That is one of the
-handful of bones near the root whose bind transform is all zeros, which is what
-an attachment point looks like rather than a body bone - the body's own meshes
-sit on bones in the 25-86 range.
+```
+flags 0x0080          bit 0x80 set: indices go through the bone table
+bone table  [5]       one entry
+vertices              110, every one referencing table slot 0 -> bone 5
+```
 
-The bone is animated. Sixty-nine clips drive bone 5, and they are exactly the
-ones whose name ends in `1` - the upper-body half of each pair. So the weapon
-still not moving says the weapon file's bone numbering is not the skeleton's,
-and something has to map one onto the other.
+Every vertex of the sword is bound to bone 5. On a hume male, bone 5 is one of
+a handful of bones near the root of the skeleton whose bind translation is all
+zeros - a socket, not a body bone. The skeleton even names two of them: it
+carries `0x07` chunks `@tr0` and `@tl0`, attach-right and attach-left.
 
-That is the same shape of problem as the head, and
-[Skeletons](Skeletons.md) is the precedent: bones have no names, so the answer
-is to find the bone by what it is rather than by its index.
+The socket is not fixed in space. It is a child of the body's bones, so it
+inherits their animation, and the idle clip drives it: `idl1`, the upper-body
+half of the idle, has a track for bone 5 with the rotation and translation that
+carry the socket from the origin up to the hip. When the body breathes, the
+socket at its hip breathes with it, and the sword hangs there.
 
-`MOGHOUSE_WEAPONS=1` turns weapons on to keep working on it. They are off by
-default, because a sword lying on the floor beside its owner is worse than no
-sword.
+**So a weapon works with no special case.** The character is built and animated
+exactly as it is without one; the weapon is one more mesh on the skeleton, and
+the skeleton puts it where the socket goes. The same sword on a Galka lands at
+the Galka's hip, on a 2.43-unit body against a hume's 1.9, with nothing
+weapon-specific: the socket is the Galka's socket. Validated in the live client
+- the sword sheathes at the hip exactly as retail does.
+
+## Sheathed, not drawn
+
+A weapon in the idle hangs at the hip because that is where the socket sits in
+that pose - the sheathed position, which is what the game shows a character who
+is not fighting. Drawing it into a fighting grip is the combat stances' job:
+the socket bone is driven by every `*1` clip, so a combat idle moves it into
+the hand the same way the plain idle keeps it at the hip. Same socket, a
+different animation - still nothing extra to do.
+
+## The bug that hid all of this
+
+The socket did not work until a renderer bug was fixed, and it is worth knowing
+because it had nothing to do with weapons.
+
+Blending an animation's translation between two frames was written by punning a
+`Vec3` as a float array. The optimiser did not see the writes as touching the
+y and z members, so **every animated translation kept only its x**. Skeletal
+motion is almost all rotation - bones turn rather than slide - so the body
+looked correct and the bug stayed invisible. The weapon socket is the one bone
+that leans on a large *translation* channel (bone 5 has an identity rotation in
+the idle and a translation that lifts it from the origin to the hip), so with y
+and z dropped the socket never left the origin and the sword hung at the ankle.
+
+It was found by re-deriving the pose maths from scratch and comparing the two
+bone by bone - the replica put the socket at the hip, the renderer at the
+origin, they agreed on every rotation-driven bone, and the difference narrowed
+to the translation blend. See the commit "Stop animation from dropping the Y
+and Z of every translation".
 
 ## Reading it back
 
 ```
-MOGHOUSE_SKIN_BONES=1 moghouse-renderer <zone>   # which bones each piece hangs on
+MOGHOUSE_SKIN_BONES=1 moghouse-renderer <zone>   # which bones each mesh hangs on
 MOGHOUSE_TRACK_BONE=5 moghouse-renderer <zone>   # which clips drive one bone
+MOGHOUSE_BONE_WORLD=5 moghouse-renderer <zone>   # where a bone lands, posed
 MOGHOUSE_LOOK="1,0,0,8,8,8,8,1,268,0,0"          # race,face,...,feet,size,main,sub,ranged
 ```
 
