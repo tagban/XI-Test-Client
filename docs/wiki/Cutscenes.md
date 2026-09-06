@@ -50,40 +50,86 @@ This is the one real blocker. Everything else is plumbing.
 
 ## What the DLL shows
 
-From the unpacked client (`tools/dllstrings.py`):
+Traced in the unpacked client with Ghidra headless (see below). Addresses are
+at the 0x10000000 image base. This is the event system's shape, down to the one
+layer still to decode.
 
-- `CXiMovie` - a class for full-motion video, i.e. the pre-rendered FMV
-  cutscenes, separate from the scripted in-engine ones.
-- Event UI resources: `eventskip`, `eventpara`, `eventinfo`, `eventtim` - the
-  menu that lets you skip or inspect an event.
-- `EventData` and `EventMessageData` file errors - the two halves the VM reads:
-  the bytecode and the text.
+### Loading the files
 
-The VM opcode dispatcher is the thing to find in Ghidra. The entry point is the
-`0x032` handler: follow it to where it loads the event block and starts
-stepping opcodes, and the dispatch table there is the opcode set. That is a
-decompiler job, not a strings job, so it waits for a Ghidra session rather than
-`dllstrings.py`.
+`FUN_100aeb90(zone)` loads the event **bytecode** file. The file id is:
 
-## A staged path to playable
+| zone range | file id |
+|---|---|
+| `< 256` | `zone + 0x16bc` (= `zone + 5820`) |
+| `256..999` | `zone + 0x14aff` |
+| `1000..1999` | `zone + 0xde31` |
+| `>= 2000` | `zone + 0x1004b` |
 
-1. **Read the parameters.** Parse `0x033` eventstr and `0x034` eventnum and keep
-   them. Cheap, and every later step needs them.
-2. **Dialogue only.** Many "cutscenes" are one NPC standing still and talking.
-   If the opcode that prints a message and the one that ends can be recognised -
-   two opcodes, not the whole set - a large fraction of events play as a
-   dialogue box with no camera work, which is most of what a quest turn-in is.
-3. **The full VM.** Camera paths, NPC animation, menus. This needs the opcode
-   set decoded from the DLL, and is the real feature.
-4. **FMVs** (`CXiMovie`) are a separate track - decoding a video container - and
-   are worth leaving until last.
+The first row is exactly the `5820 + zone` MogHouse already uses, now confirmed
+and extended to the expansion ranges. `FUN_100ae1f0(zone)` loads the **message**
+(text) file, its base id from a category table (`FUN_1025b570(0x6b..0x6e)`).
 
-Stopping at (2) would already make questing legible, and it is the smallest
-next step that shows something on screen instead of skipping.
+### Starting an event
 
-## Do not lose the skip
+`FUN_100aed10(entity, eventId, p3, p4)` is the start: it clears a large state
+block, then loads the bytecode and the message for the event.
 
-Whatever plays events must keep the current skip as a fallback: an event whose
-bytecode hits an opcode the VM does not know has to end cleanly rather than
-trap the character in an `InEvent` state forever. The skip that exists today is
-that fallback.
+### The bytecode buffer
+
+`DAT_10489944` points at the loaded bytecode. Its first dword is a **count** in
+the low 30 bits with two flag bits on top (`& 0x3fffffff`); the entries follow.
+This is the same container `FfxiEventTable` already parses.
+
+Each entry carries a **target list** and a script. `FUN_100bd140` walks the
+list (count at `+4`, target ids at `+8`) and matches an entry to the entity the
+event fired on (`DAT_1048871c`); `0xfffe` is a wildcard that matches anyone.
+
+`FUN_100af190` decodes an entry's target reference. Values `0x7fffffc0` to
+`0x7fffffff` are **dynamic references** - the player, the last actor, and so on,
+resolved through helpers - and any other value is a plain entry whose low ten
+bits are the entity index. This is why a message is not reachable by a bare
+`u16`: the target, and the script that runs, are chosen by these tagged values,
+not by a fixed offset.
+
+### Setup to running
+
+`FUN_100aeeb0` matches the triggered entity to an entry, sets a per-actor
+"has an active event" bit in the `DAT_10488020` bitmap (`FUN_100af2d0` sets,
+`FUN_100af300` tests), and allocates a per-actor **event task object of type
+0x16** (`FUN_100aec80` -> `FUN_100fc3d0(0x16, ...)`). `FUN_100ae400` is the
+per-frame update that walks every actor and drives its event position, facing,
+animation and flags.
+
+Load progress lives in `_DAT_1048994c` (states 0..7); the debug logger
+`FUN_100ad58c` prints `CSTAT/SSTAT/UC/EF/Slock/ETask` with task-state names from
+a small table at `0x1035af5f` (`init`, `ini1`, `ini2`, `ini3`).
+
+### The one layer left: the opcode VM
+
+The type-0x16 event task's own update is the bytecode interpreter - the switch
+over opcodes that moves the camera, poses an actor, prints a message, offers a
+menu, waits, fades and ends. It is the largest single thing left to reverse in
+the client, and it is what actually plays a cutscene. The entry to it is the
+type-0x16 object created in `FUN_100aec80`; following the task framework's
+dispatch for that type reaches the opcode switch.
+
+For the dialogue-only milestone, only two of those opcodes matter - print a
+message by id, and end - so that switch does not have to be decoded whole
+before something plays.
+
+## Driving Ghidra without the GUI
+
+The decompiler runs headless against the analysed project, no MCP and no
+CodeBrowser:
+
+```
+JAVA_HOME=/opt/homebrew/opt/openjdk@21 \
+  /opt/homebrew/opt/ghidra/libexec/support/analyzeHeadless \
+  <projectDir> <projectName> -process FFXiMain.unpacked.dll -noanalysis \
+  -scriptPath ~/ghidra-scripts -postScript DecompDump.java
+```
+
+`DecompDump.java` reads a list of hex addresses from `$MOGHOUSE_TARGETS` and
+writes their decompiled C to `$MOGHOUSE_OUT`. `tools/dllstrings.py` finds the
+addresses - strings, cross-references and float constants - so the two together
+are the whole loop: find an address, decompile what is there, follow it.
