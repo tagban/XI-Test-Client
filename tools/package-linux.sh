@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Build the linux-x64 tree that flatpak/com.tagban.MogHouse.yml packages.
 #
-# UNTESTED - written on a Mac, where neither this nor flatpak-builder can run.
-# Treat it as "this is what the build should do", not "this is known to work",
-# and read docs/linux-handoff.md before assuming a failure means the design is
-# wrong. It is short; read it rather than trusting it.
+# First run on Linux was 2026-09-05, under WSL2 on Ubuntu 24.04; it produced the
+# linux-x64 zip attached to the v0.2.0 release. flatpak-builder is still
+# untested. Read docs/linux-handoff.md for what that first build needed.
 #
 # Produces dist/linux-x64/ holding:
 #
@@ -12,6 +11,7 @@
 #                                  assembly published inside it
 #   libmoghouse_interop.so         the renderer
 #   libSDL3.so.0                   unless the runtime provides it
+#   README.txt                     what the player is looking at
 #   assets/  keys/  res/  zones/
 #
 # Everything sits in one directory because the renderer looks for its assets
@@ -201,6 +201,91 @@ if [ -n "$ZONEDATA" ]; then
 else
     warn "No zone data: walking to the edge of a zone will not change zones. Use !zone."
 fi
+
+# --- what to do with it ------------------------------------------------------
+
+# The Windows package has carried a README from the start and this one did not,
+# so --version was a flag that changed nothing. Same text, less the parts that
+# only make sense with a data\ folder and an .exe.
+step "Writing README"
+cat > "$out/README.txt" <<EOF
+MogHouse XI - Alpha $VERSION
+============================
+
+A from-scratch Final Fantasy XI client. This is an alpha: it is missing a
+great deal, and the parts that are here are the parts that have been built so
+far rather than the parts you would miss least.
+
+What you need
+-------------
+
+  * A Final Fantasy XI installation, updated to the AUGUST 2026 patch. The
+    client finds it and reads the game's own files - models, textures, zones,
+    music. Nothing here replaces them and no game data is included. A Wine or
+    Proton install is fine; it is the files that matter, not how they got here.
+  * A private server to connect to, running that same version, and an account
+    on it.
+  * A GPU with a working Vulkan driver. Mesa covers AMD and Intel; NVIDIA needs
+    its proprietary driver. If the renderer reports an adapter named llvmpipe,
+    it has fallen back to software and will be very slow.
+
+This is not backwards compatible. An older install, or an older server, will
+not work, and it will not always fail in an obvious way: file ids move between
+versions, so the wrong model loads, and packet layouts shift, so fields are
+read from the wrong place. If something is odd in a way this README does not
+explain, check the version first.
+
+Running it
+----------
+
+  1. Unzip anywhere. There is no installer.
+  2. Run ./"MogHouse XI" - or mark it executable first if your unzip tool
+     dropped the permission bit: chmod +x "MogHouse XI"
+  3. Confirm where the game is, enter your server's address, then log in.
+
+Everything travels in this one directory: the client, the renderer
+(libmoghouse_interop.so), SDL3, and the files they read. They have to stay
+together, because the renderer looks for its assets beside the directory its
+own library was loaded from. Delete the folder to remove the client completely.
+
+Settings live in moghouse-settings.json beside the executable, and the servers
+you add live beside that. If this directory is not writable - which is the case
+inside a Flatpak - both move to \$XDG_DATA_HOME instead. They are plain text and
+safe to edit while the client is closed. bodyDrawDistance is the one worth
+knowing: 0 draws every character the client can, and a smaller number is how a
+machine short of headroom keeps up.
+
+Controls
+--------
+
+  WASD          walk                    Shift   run
+  Mouse drag    look                    Space   jump
+  R             auto-run                Tab     orbit
+  M             hold the map north-up   U       back out if collision traps you
+  + and -       music volume            P       print position to the log
+  / and !       open chat, with the key already typed
+
+Known missing, so you do not report what is already known
+---------------------------------------------------------
+
+  * Combat. You can walk, talk, zone and look at the world; you cannot fight.
+  * Telepoint and Homepoint crystals are invisible.
+  * Some creatures have no model and do not appear.
+  * Hair colour is wrong for some faces.
+  * There is no full-screen map yet.
+
+If something is wrong
+---------------------
+
+There are two logs beside the executable: moghouse.log for the client and
+moghouse.log.renderer for the world - or in \$XDG_DATA_HOME, if that is where
+the settings went. Both are plain text, and between them they usually say what
+happened. Attaching them to a bug report is the single most useful thing you
+can do.
+
+Report bugs from inside the game with the link in the top-left corner, or at
+the GitHub issues page. There is a Discord link beside it.
+EOF
 
 # --- check --------------------------------------------------------------------
 

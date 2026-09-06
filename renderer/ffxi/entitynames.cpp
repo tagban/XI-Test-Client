@@ -1,6 +1,7 @@
 #include "entitynames.h"
 
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <vector>
 

@@ -1,9 +1,13 @@
 # Building MogHouse on Linux
 
 Written on the Mac for whoever picks this up on Linux, in the same spirit as
-`docs/macos-handoff.md` was written on Windows for the Mac. Nothing here has
-been run on Linux — treat every claim as "this is what the code says", not
-"this is known to work". Where something is genuinely unknown it says so.
+`docs/macos-handoff.md` was written on Windows for the Mac.
+
+**This has now been done.** On 2026-09-05 it built and ran under WSL2 on Ubuntu
+24.04, and the result is the `linux-x64` zip on the v0.2.0 release. What follows
+was largely right; the five things it did not predict are in "What the first
+build actually needed" below, and the fixes for all of them are in the tree. The
+one claim still untested is hardware Vulkan — see the end.
 
 Read `docs/macos-handoff.md` too, particularly "What happened on the Mac". Two
 of the bugs found there were not macOS bugs at all, and one of them is very
@@ -31,11 +35,14 @@ Done already, and none of it needs redoing:
   writable directory, and the renderer still derives its own file by appending
   `.renderer`.
 - **`flatpak/com.tagban.MogHouse.yml`** exists, with a `.desktop` and a
-  metainfo file. UNTESTED.
-- **`tools/package-linux.sh`** exists, producing the `dist/linux-x64` tree the
-  manifest packages. UNTESTED. It is short; read it rather than trusting it.
+  metainfo file. Still UNTESTED — flatpak-builder has not been run.
+- **`tools/package-linux.sh`** produces the `dist/linux-x64` tree the manifest
+  packages. This one has now been run, and it was right: the only thing it was
+  missing was the README the Windows package has always carried, which is why
+  its `--version` flag changed nothing. Both are fixed.
 
-Not done: anything actually compiled or run on Linux.
+Done since: the client compiles, packages and runs. It reads the game's DATs,
+reaches a server, logs in, enters the world, and the renderer draws the zone.
 
 ## Setting up WSL2
 
@@ -77,12 +84,36 @@ about real Vulkan.
 
 Everything below wants these:
 
-    sudo apt install -y build-essential cmake ninja-build git python3 \
-        libsdl3-dev patchelf pkg-config
+This is the list that actually worked on 24.04, rather than the short one this
+document used to guess at:
 
-If `libsdl3-dev` is not in 24.04's archive yet, build SDL3 from source — it
-must be 3.x, because the code uses `SDL_OpenAudioDeviceStream` with a callback,
-which SDL2 does not have. The Mac used 3.4.14; matching it avoids a variable.
+    sudo apt install -y build-essential cmake ninja-build git python3 \
+        patchelf pkg-config zip \
+        libvulkan-dev vulkan-tools mesa-vulkan-drivers \
+        libx11-dev libx11-xcb-dev libxext-dev libxrandr-dev libxi-dev \
+        libxcursor-dev libxss-dev libxtst-dev libxfixes-dev libxkbcommon-dev \
+        libxinerama-dev libwayland-dev wayland-protocols libdecor-0-dev \
+        libegl1-mesa-dev libgl1-mesa-dev libdrm-dev libgbm-dev \
+        libasound2-dev libpulse-dev libudev-dev libdbus-1-dev \
+        libxcb1-dev libxcb-dri3-dev libxcb-present-dev libxcb-sync-dev \
+        libxcb-xfixes0-dev libxcb-randr0-dev libxcb-shm0-dev libxcb-glx0-dev
+
+Two of those names are traps. `libxcb-xfixes0-dev` and `libxcb-randr0-dev` carry
+a `0` that the others do not, and apt fails the whole command over one wrong
+name. `libx11-xcb-dev` is the one Dawn needs, and its absence does not surface
+until several minutes into the build.
+
+There is no `libsdl3-dev` in 24.04 — build SDL3 from source. It must be 3.x,
+because the code uses `SDL_OpenAudioDeviceStream` with a callback, which SDL2
+does not have. The Mac used 3.4.14 and so did this; matching avoids a variable:
+
+    git clone --depth 1 --branch release-3.4.14 https://github.com/libsdl-org/SDL.git
+    cmake -S SDL -B build-sdl3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+        -DSDL_SHARED=ON -DSDL_STATIC=OFF
+    cmake --build build-sdl3 && sudo cmake --install build-sdl3 && sudo ldconfig
+
+Its configure stops on the first missing X11 package it finds and names only
+that one, so expect to go round twice if the list above is trimmed.
 
 **1. .NET 10.** Microsoft's apt feed, or the install script into `$HOME`, which
 needs no root:
@@ -161,6 +192,42 @@ all four WGSL modules compiled on Metal with no complaint, which is mild
 evidence they are portable, but Vulkan's validation is stricter in different
 places than Metal's.
 
+## What the first build actually needed
+
+Five things, none of them predicted here, all now fixed in the tree. Listed so
+the next person on a fresh machine recognises them rather than debugging them.
+
+1. **`build-dawn.sh` died in the generate step**, after a full configure, with
+   *"the target named dawncpp_module has C++ sources that may use modules, but
+   the compiler does not provide a way to discover the import graph"*. Dawn
+   decides `DAWN_SUPPORTS_CXX_MODULES` by compiling a module, and GCC accepts
+   one under `-fmodules-ts`, so the probe says yes — but CMake cannot scan the
+   import graph for GCC, so generation then fails. Nothing here imports the
+   module. The script now passes `-DDAWN_SUPPORTS_CXX_MODULES=False`.
+
+2. **Dawn stopped mid-build on a missing `X11/Xlib-xcb.h`.** That is
+   `libx11-xcb-dev`. It reads like a Dawn bug and is a missing package.
+
+3. **Two missing includes**, invisible to MSVC and libc++ and fatal on
+   libstdc++: `renderer/ffxi/entitynames.cpp` calls `std::memcpy` without
+   `<cstring>`, and `native/moghouse_interop/src/moghouse_interop.cpp` calls
+   `std::find` without `<algorithm>`. This is the same class of thing
+   `fix-missing-includes.ps1` exists for.
+
+4. **The link failed at the very last step** with a relocation error naming a
+   mangled `std::vector` destructor and telling us to recompile with `-fPIC`.
+   Both static libraries end up inside `libmoghouse_interop.so`, and Linux will
+   not link non-PIC objects into a shared library. `renderer/CMakeLists.txt`
+   now sets `CMAKE_POSITION_INDEPENDENT_CODE ON`. Dawn's own static library was
+   already PIC, so it needed no rebuild. Windows has no such notion and macOS
+   compiles PIC by default, which is why this waited for Linux to find it.
+
+5. **SDL3 is not in Ubuntu 24.04 at all**, which this document suspected. Its
+   configure also wants `libxtst-dev`, which nothing else does.
+
+With those, `./build-dawn.sh`, `./build-renderer.sh` and
+`tools/package-linux.sh` all run unmodified.
+
 ## What is most likely to break
 
 Roughly in order, and honestly flagged rather than predicted.
@@ -232,9 +299,18 @@ macOS is finished: signed, notarized, stapled, verified as a downloader sees
 it, for both arm64 and x86_64. `tools/package-macos.sh` builds them and
 `tools/notarize-macos.sh` submits and staples.
 
-Linux has no equivalent yet. When it works, the natural next step is putting
-the Flatpak build in CI — free x86_64 runners, reproducible artifacts, and no
-dependence on any one machine being booted into the right OS. The VM then
-becomes a test environment rather than a build environment, which is the
-healthier split. CI cannot test the GPU, so a real machine still has to answer
-the Vulkan question at least once.
+Linux now has a portable zip — `MogHouse-XI-Alpha-0.2.0-linux-x64.zip`, built
+by `tools/package-linux.sh` and attached to the v0.2.0 release. No Flatpak yet,
+and no signing, which Linux does not ask for the way macOS does.
+
+The natural next step is still putting the build in CI — free x86_64 runners,
+reproducible artifacts, and no dependence on any one machine being booted into
+the right OS. Dawn is the only slow part and it caches well.
+
+**The Vulkan question is still open.** The first build ran under WSL2, where the
+only adapter offered was `llvmpipe` — Mesa's software rasteriser. It drew the
+zone correctly, which proves the Vulkan backend is wired up and the shaders
+compile, but says nothing about a real driver. WSL had `/dev/dxg` and
+`libd3d12.so` present but no `dzn` ICD installed, so there was no hardware path
+to take. A machine with an AMD, Intel or NVIDIA driver still has to confirm
+this once, and that remains the one thing CI cannot do either.
