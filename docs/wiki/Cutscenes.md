@@ -104,6 +104,24 @@ Load progress lives in `_DAT_1048994c` (states 0..7); the debug logger
 `FUN_100ad58c` prints `CSTAT/SSTAT/UC/EF/Slock/ETask` with task-state names from
 a small table at `0x1035af5f` (`init`, `ini1`, `ini2`, `ini3`).
 
+### The message lookup is a format MogHouse already has
+
+`FUN_100962cf(id)` calls `FUN_10096230(messageBuffer, id)`, which is the
+event-text lookup, and it is the same offset-table shape as the zone dialogue
+table `FfxiDialogueTable` already parses:
+
+```c
+count = (u32 at buffer+4 - 4) / 4;                 // FUN_10096260
+text  = buffer + 4 + (u32 at buffer + 4 + id*4);   // FUN_10096230
+```
+
+Compare [Dialogue](Dialogue.md): a dword at 0, an offset table at +4, text after,
+`count = firstOffset / 4`. Identical. So the **text a cutscene shows is already
+solved** - MogHouse can look up any event message by id today. What it does not
+know is *which* id, and when, because that is chosen by the bytecode. This is
+the precise shape of the remaining gap: not the text, not the transport, just
+the opcode that names a message.
+
 ### The one layer left: the opcode VM
 
 The type-0x16 event task's own update is the bytecode interpreter - the switch
