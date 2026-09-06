@@ -778,7 +778,8 @@ await SendLoginAsync(zoneServer, uniqueNo, characterName, accountName, clientVer
                 // the only durable answer is to reply to whatever arrives.
                 foreach ((ushort id, int offset, int size) in FfxiZonePacket.EnumerateSubPackets(incoming.Plaintext))
                 {
-                    if (id != FfxiEventStart.PacketId)
+                    if (id != FfxiEventStart.PacketId && id != FfxiEventStart.PacketIdStr &&
+                        id != FfxiEventStart.PacketIdNum)
                     {
                         continue;
                     }
