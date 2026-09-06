@@ -37,11 +37,21 @@ the repository.
 import struct
 import sys
 
-# The two sizes the stub is called with. Checked against the section header
-# rather than trusted: if a patch ever changes them the mismatch is the
-# symptom, and a silent half-unpack is much worse than a loud failure.
-STREAM_LENGTH = 0x1E5A60
-UNPACKED_SIZE = 0x32762E
+# Nothing here is hardcoded to one DLL. The two sizes the stub is called with
+# are both derivable, which is what lets this run on FFXi.dll as well:
+#
+#   the stream   runs from POL1's start up to the entry point, because the
+#                unpacker sits directly behind the data it unpacks
+#   the output   is .text's virtual size
+#
+# Checked against FFXiMain, where the stub's own constants are visible:
+# 0xbb1a60 - 0x9cc000 = 0x1e5a60 and .text is 0x32762e. Both exact.
+
+
+def entry_rva(data):
+    """AddressOfEntryPoint, which is where the packed stream stops."""
+    pe = struct.unpack_from("<I", data, 0x3C)[0]
+    return struct.unpack_from("<I", data, pe + 24 + 0x10)[0]
 
 
 def sections(data):
@@ -112,8 +122,13 @@ def main(argv):
         print("this .text already has bytes on disk - nothing to unpack")
         return 1
 
-    packed = data[pol1["rawptr"]:pol1["rawptr"] + STREAM_LENGTH]
-    out = unpack(packed, UNPACKED_SIZE)
+    stream = entry_rva(data) - pol1["vaddr"]
+    if not 0 < stream <= pol1["rawsize"]:
+        print(f"the entry point is not behind POL1 - stream would be {stream:#x}")
+        return 1
+
+    packed = data[pol1["rawptr"]:pol1["rawptr"] + stream]
+    out = unpack(packed, text["vsize"])
 
     print(f"POL1 at {pol1['rawptr']:#x}, {len(packed):#x} bytes packed")
     print(f"unpacked {len(out):#x} of {text['vsize']:#x} declared", end="  ")
