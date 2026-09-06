@@ -36,6 +36,14 @@ enum class LookSlot : uint8_t
     Hands,
     Legs,
     Feet,
+    /// What is in each hand, and what is slung on the back.
+    ///
+    /// Main and Sub read the same window: a sword is one model whichever hand
+    /// holds it, and a one-handed item names both slots with a single model
+    /// id. Ranged has a window of its own - see look.cpp.
+    Main,
+    Sub,
+    Ranged,
     Count
 };
 
@@ -74,8 +82,12 @@ size_t modelFileId(Race race, LookSlot slot, uint16_t modelId);
 std::vector<std::filesystem::path> lookFiles(const FileTable& table, const Look& look);
 
 /// Parses "race,face,head,body,hands,legs,feet" - the shape a look arrives in
-/// from the server - with an optional eighth number, the size. Returns false
-/// if it does not have at least seven.
+/// from the server - with an optional eighth number, the size, and an optional
+/// ninth, tenth and eleventh: main hand, sub hand and ranged. Returns false if
+/// it does not have at least seven.
+///
+/// The weapons go after the size rather than beside the armour so that every
+/// look string written before they existed still parses.
 bool parseLook(const std::string& text, Look& look);
 
 const char* raceName(Race race);

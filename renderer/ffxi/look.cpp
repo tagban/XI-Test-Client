@@ -1,6 +1,7 @@
 #include "look.h"
 
 #include <cstdio>
+#include <cstdlib>
 
 namespace ffxi
 {
@@ -45,6 +46,26 @@ constexpr SlotWindow kSlotWindow[] = {
     {552, 256},  // hands
     {808, 256},  // legs
     {1064, 256}, // feet
+
+    // The weapons, which sit straight after the feet and run to where the
+    // block goes empty at +2600. Two windows, not three: main and sub read the
+    // same 1024 because a sword is one model whichever hand holds it, and a
+    // one-handed item names both slots with a single model id.
+    //
+    // Both offsets were swept rather than assumed, scoring every candidate
+    // against the weapon type the server's own item table gives each model id.
+    // A DAT's texture is named for what it is - hf_swo6_ is a sword, hf_axe1_
+    // an axe - so the type is checkable per file. +1320 scores 63% against 50%
+    // one either side, and per type: hand-to-hand 93%, axe 91%, scythe 88%,
+    // great katana 88%, dagger 86%, polearm 85%. Ranged scores 98% at +2344,
+    // against 77% one step away.
+    //
+    // Ranged needing its own window is what the sweep found rather than what
+    // it was looking for: bows and guns score zero at +1320 while every melee
+    // type scores high, which is what says they are somewhere else.
+    {1320, 1024}, // main
+    {1320, 1024}, // sub
+    {2344, 256},  // ranged
 };
 } // namespace
 
@@ -103,6 +124,42 @@ size_t modelFileId(Race race, LookSlot slot, uint16_t modelId)
     {
         return 0;
     }
+
+    if (slot >= LookSlot::Main)
+    {
+        // An empty hand. Zero is a real model everywhere else - face 0 is a
+        // face - but no weapon in the item table has it, so for a weapon it
+        // can only mean nothing is held. Without this the file at the foot of
+        // the window is a real mesh, and every unarmed character walks around
+        // holding it.
+        if (modelId == 0)
+        {
+            return 0;
+        }
+
+        // Off by default, because the weapon does not end up in the hand yet.
+        //
+        // The file is right and the mesh loads - a bronze sword adds its 92
+        // triangles to the character - but it draws at the character's feet.
+        // It is skinned to exactly one bone, 5 on a hume male, which is one of
+        // the handful near the root whose bind transform is all zeros; those
+        // look like attachment points rather than body bones. Every clip whose
+        // name ends in 1 - the upper-body half - drives bone 5, sixty-nine of
+        // them, so the bone is animated and the weapon still does not move,
+        // which says the weapon file's bone numbering is not the skeleton's.
+        // Mapping one onto the other is the open question, and it is the same
+        // shape as the one docs/wiki/Skeletons.md answers for the head: find
+        // the bone by what it is, not by its index.
+        //
+        // MOGHOUSE_WEAPONS=1 turns them on to keep working on it. Until then a
+        // sword lying on the floor beside its owner is worse than no sword.
+        static const bool weaponsEnabled = std::getenv("MOGHOUSE_WEAPONS") != nullptr;
+        if (!weaponsEnabled)
+        {
+            return 0;
+        }
+    }
+
     return base + offset + modelId;
 }
 
@@ -126,9 +183,13 @@ std::vector<std::filesystem::path> lookFiles(const FileTable& table, const Look&
 
 bool parseLook(const std::string& text, Look& look)
 {
-    unsigned values[8] = {1, 0, 0, 0, 0, 0, 0, 1};
-    const int given = std::sscanf(text.c_str(), "%u,%u,%u,%u,%u,%u,%u,%u", &values[0], &values[1], &values[2],
-                                  &values[3], &values[4], &values[5], &values[6], &values[7]);
+    // race, the six worn slots, the size, then the three weapons. Only the
+    // first seven are required - a look written before weapons existed still
+    // parses, and leaves the hands empty.
+    unsigned values[11] = {1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0};
+    const int given =
+        std::sscanf(text.c_str(), "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", &values[0], &values[1], &values[2], &values[3],
+                    &values[4], &values[5], &values[6], &values[7], &values[8], &values[9], &values[10]);
     if (given < 7)
     {
         return false;
@@ -140,9 +201,16 @@ bool parseLook(const std::string& text, Look& look)
     }
 
     look.race = static_cast<Race>(values[0]);
-    for (size_t i = 0; i < static_cast<size_t>(LookSlot::Count); ++i)
+
+    // The armour runs straight on from the race; the weapons are past the
+    // size, so the two halves are copied separately rather than by one offset.
+    for (size_t i = 0; i <= static_cast<size_t>(LookSlot::Feet); ++i)
     {
         look.model[i] = static_cast<uint16_t>(values[i + 1]);
+    }
+    for (size_t i = 0; i < 3; ++i)
+    {
+        look.model[static_cast<size_t>(LookSlot::Main) + i] = static_cast<uint16_t>(values[8 + i]);
     }
     return true;
 }
@@ -173,6 +241,9 @@ const char* slotName(LookSlot slot)
     case LookSlot::Hands: return "hands";
     case LookSlot::Legs: return "legs";
     case LookSlot::Feet: return "feet";
+    case LookSlot::Main: return "main";
+    case LookSlot::Sub: return "sub";
+    case LookSlot::Ranged: return "ranged";
     default: return "?";
     }
 }

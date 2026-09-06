@@ -96,7 +96,21 @@ public sealed record FfxiEntityLook(FfxiLookKind Kind, ushort ModelId, byte Race
     /// </summary>
     public static ushort ModelOf(ushort tagged) => (ushort)(tagged & 0x0FFF);
 
-    /// <summary>The seven numbers the character loader takes, in its order.</summary>
+    /// <summary>
+    /// The numbers the character loader takes, in its order: race, the six
+    /// worn slots, the size, then what is in each hand and slung on the back.
+    ///
+    /// The size is always 1 here. A player's look carries no size field - the
+    /// server sends that separately as GraphSize - and the position has to be
+    /// filled because the weapons come after it. They come after it so that a
+    /// look string written before weapons existed still parses.
+    ///
+    /// A weapon model of zero is an empty hand. No weapon in the item table
+    /// has model zero, so nothing is lost by reading it that way, and the file
+    /// at the foot of the weapon window is a real mesh that would otherwise be
+    /// put in the hand of everyone standing around unarmed.
+    /// </summary>
     public string ToLookString() =>
-        $"{Race},{Face},{ModelOf(Head)},{ModelOf(Body)},{ModelOf(Hands)},{ModelOf(Legs)},{ModelOf(Feet)}";
+        $"{Race},{Face},{ModelOf(Head)},{ModelOf(Body)},{ModelOf(Hands)},{ModelOf(Legs)},{ModelOf(Feet)}," +
+        $"1,{ModelOf(Main)},{ModelOf(Sub)},{ModelOf(Ranged)}";
 }
