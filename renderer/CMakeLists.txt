@@ -10,6 +10,13 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Both static libraries here end up inside libmoghouse_interop.so, and Linux
+# refuses to link non-PIC objects into a shared library - it fails at the very
+# last step, on a relocation error naming a symbol rather than a cause. Windows
+# has no such notion and macOS compiles PIC anyway, so this only ever mattered
+# on Linux, which is why it went unnoticed until the first build there.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Dawn's exported target lists Threads::Threads in its link interface but its
 # config never looks for it, so find_package(Dawn) fails unless we do this
 # first.
