@@ -37,6 +37,11 @@ struct WaveCurves
     /// stalls out at sea. Set from the model's own length at build time to
     /// even them out; 1 for the longest.
     float reachScale{1.0f};
+    /// The strip's own z length, from the model bounds at build time. The
+    /// stretch reaches `spread * extentZ` world units from the anchor; carried
+    /// here so the draw can place a short foam band at that reach instead of a
+    /// long stretched strip that reads as streaks up the beach.
+    float extentZ{11.25f};
     ///
     /// scaleZ (op 0x29) is a factor on the strip's own z scale, not a target
     /// size. nmia is 11.25 deep with its z bounds starting at zero, so it grows

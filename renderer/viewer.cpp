@@ -1999,6 +1999,10 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
                 // up by how much shorter it is, against the longest, so the
                 // foam reaches the shallows together. A wash does not stretch.
                 const float extentZ = model->second.boundsMax[2] - model->second.boundsMin[2];
+                if (extentZ > 0.1f)
+                {
+                    params.wave.extentZ = extentZ;
+                }
                 if (wave && extentZ > 0.1f)
                 {
                     // Square-rooted and capped low: matching the reach exactly
@@ -8559,40 +8563,52 @@ const float kWavePeriod = [] {
                     }
                     float matrix[16];
                     std::memcpy(matrix, baseInstances.data() + at16, sizeof(matrix));
-                    // Column two is the z axis. Scaling it stretches the strip
-                    // across the sand without moving where it sits.
                     // MOGHOUSE_WAVE_DIR=-1 grows the strip the other way. The
-                    // model's z runs 0..11.25, so its geometry lies to one side
-                    // of its own origin, and the half turn placementTransform
-                    // applies decides which side that is in the world. Growing
-                    // the wrong way puts the whole band out to sea and moves it
-                    // further out as it swells.
+                    // model's z runs 0..extentZ, so its geometry lies to one
+                    // side of its own origin, and the half turn placementTransform
+                    // applies decides which side that is in the world.
                     static const float dir = [] {
                         const char* set = std::getenv("MOGHOUSE_WAVE_DIR");
                         return set ? std::strtof(set, nullptr) : 1.0f;
                     }();
-                    matrix[8] *= spread * dir;
-                    matrix[9] *= spread * dir;
-                    matrix[10] *= spread * dir;
-                    // MOGHOUSE_WAVE_LIFT raises the strip. It sits at -4.7
-                    // where the sea sheet it washes over is at -3.96, so it is
-                    // three quarters of a unit under the water - and where the
-                    // seabed climbs to meet the shore, the sand cuts the foam
-                    // off before it cuts the water. The foam then survives only
-                    // out where the bottom is deep, which is the opposite of a
-                    // beach.
+                    // Column two is the strip's own z axis - a unit vector, the
+                    // placement's z scale being one - captured before it is
+                    // rescaled below.
+                    const float uzx = matrix[8], uzy = matrix[9], uzz = matrix[10];
+                    // The old full stretch reached spread*extentZ world units
+                    // from the anchor and landed the shoreward edge on the
+                    // waterline. But an 85-unit strip stretched across the water
+                    // reads as long streaks up the beach. Draw a short band at
+                    // that same shoreward edge instead: scale the geometry to
+                    // MOGHOUSE_WAVE_BAND units deep, and slide the anchor forward
+                    // by the length taken off, so the band sits at the waterline
+                    // rather than reaching to it. A wave is a line of foam at the
+                    // shore, not a sheet laid across the whole bay.
+                    const float worldReach = spread * draw.wave.extentZ;
+                    static const float band = [] {
+                        const char* set = std::getenv("MOGHOUSE_WAVE_BAND");
+                        return set ? std::strtof(set, nullptr) : 20.0f;
+                    }();
+                    const float bandDepth = std::min(band, worldReach);
+                    const float bandSpread = bandDepth / draw.wave.extentZ;
+                    const float slide = (worldReach - bandDepth) * dir;
+                    matrix[8] *= bandSpread * dir;
+                    matrix[9] *= bandSpread * dir;
+                    matrix[10] *= bandSpread * dir;
+                    // MOGHOUSE_WAVE_LIFT raises the strip; MOGHOUSE_WAVE_Z slides
+                    // it along world z for probing. The band slide runs along the
+                    // strip's own z axis so it stays on the shoreward line.
                     static const float lift = [] {
                         const char* set = std::getenv("MOGHOUSE_WAVE_LIFT");
                         return set ? std::strtof(set, nullptr) : 0.0f;
                     }();
-                    matrix[13] += lift;
-                    // MOGHOUSE_WAVE_Z slides the strip along z, for finding out
-                    // how far off the shore it is before working out why.
                     static const float shift = [] {
                         const char* set = std::getenv("MOGHOUSE_WAVE_Z");
                         return set ? std::strtof(set, nullptr) : 0.0f;
                     }();
-                    matrix[14] += shift;
+                    matrix[12] += uzx * slide;
+                    matrix[13] += uzy * slide + lift;
+                    matrix[14] += uzz * slide + shift;
                     queue.WriteBuffer(instanceBuffer, static_cast<uint64_t>(at16) * sizeof(float), matrix,
                                       sizeof(matrix));
                 }
