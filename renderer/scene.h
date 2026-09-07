@@ -31,6 +31,12 @@ struct WaveCurves
     std::string opacity; ///< op 0x2d
     std::string u;       ///< op 0x2e, an offset in uv, not a rate
     std::string v;       ///< op 0x2f
+    /// Per-wave reach, so a short wave runs as far up the sand as a long one.
+    /// Op 0x29 scales each wave's own geometry, so the raised nms (localZ ~4)
+    /// reaches a third of what the flat nmia (localZ 11.25) does and its foam
+    /// stalls out at sea. Set from the model's own length at build time to
+    /// even them out; 1 for the longest.
+    float reachScale{1.0f};
     ///
     /// scaleZ (op 0x29) is a factor on the strip's own z scale, not a target
     /// size. nmia is 11.25 deep with its z bounds starting at zero, so it grows

@@ -1992,6 +1992,17 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
                 params.wave.opacity = effect.opacityCurve;
                 params.wave.u = effect.uCurve;
                 params.wave.v = effect.vCurve;
+                // Even the reach across waves of different length. Op 0x29
+                // scales each wave's own geometry, so the short raised nms
+                // (~4 deep) runs a third as far up the sand as the long flat
+                // nmia (11.25) and stalls in the deep water. Scale its stretch
+                // up by how much shorter it is, against the longest, so the
+                // foam reaches the shallows together. A wash does not stretch.
+                const float extentZ = model->second.boundsMax[2] - model->second.boundsMin[2];
+                if (wave && extentZ > 0.1f)
+                {
+                    params.wave.reachScale = std::clamp(11.25f / extentZ, 1.0f, 3.0f);
+                }
                 if (std::getenv("MOGHOUSE_WAVE_WATCH"))
                 {
                     std::printf("wave setup %-4s generator says %8.2f %8.2f %8.2f   model z bounds %.2f..%.2f\n",
@@ -8454,7 +8465,7 @@ const float kWavePeriod = [] {
                 const float wave[4] = {at(draw.wave.u, 0.0f), at(draw.wave.v, 0.0f),
                                        wash ? at(draw.wave.opacity, 0.25f)
                                             : std::min(at(draw.wave.opacity, 0.25f) * 4.0f * gain, 1.0f),
-                                       wash ? -1.0f : std::max(stretch * reach, 1.0f)};
+                                       wash ? -1.0f : std::max(stretch * reach * draw.wave.reachScale, 1.0f)};
                 // MOGHOUSE_WAVE_WATCH=1 says, once, what each wave draw is and
                 // where its copies stand. A wave that is not on screen and a
                 // wave that is not being drawn look the same from the beach.
@@ -8533,7 +8544,7 @@ const float kWavePeriod = [] {
                 // nms, localZ ~4) reaches far less than a long one (nmia,
                 // localZ 11.25); the multiplier tunes it until the foam wets the
                 // whole beach.
-                const float spread = stretch * reach;
+                const float spread = stretch * reach * draw.wave.reachScale;
                 for (uint32_t n = 0; n < draw.instanceCount; ++n)
                 {
                     const size_t at16 = (static_cast<size_t>(draw.instanceOffset) + n) * 16;
