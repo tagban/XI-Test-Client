@@ -74,7 +74,11 @@ namespace
 {
 constexpr uint32_t kWidth = 1280;
 constexpr uint32_t kHeight = 720;
-constexpr wgpu::TextureFormat kDepthFormat = wgpu::TextureFormat::Depth24Plus;
+// Depth24PlusStencil8 rather than plain Depth24Plus: the sea draws through a
+// stencil so a bay tiled by several overlapping sheets draws each pixel once,
+// rather than stacking their translucency into rectangular seams. The stencil
+// byte is unused by every other pass.
+constexpr wgpu::TextureFormat kDepthFormat = wgpu::TextureFormat::Depth24PlusStencil8;
 
 /// Where along the line a character-select line-up stands, and how far back
 /// from it.
@@ -3179,6 +3183,9 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
     wgpu::Buffer waterVertexBuffer;
     wgpu::Buffer waterIndexBuffer;
     wgpu::RenderPipeline waterPipeline;
+    /// The same water pipeline with a stencil that draws each pixel once, used
+    /// for the sea so its overlapping sheets do not stack into seams.
+    wgpu::RenderPipeline waterSeaPipeline;
     // Whether this zone's water is the sea, decided by the ripple sheet it
     // ships - see the chooser. The water shader draws the two differently.
     bool waterIsSea = false;
@@ -4002,6 +4009,28 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
                     .fragment = &waterFragment};
                 waterPipeline = device.CreateRenderPipeline(&waterPipelineDescriptor);
 
+                // The sea again, through a stencil: draw where the stencil is
+                // not yet one, and write one where it draws. A bay tiled by
+                // several overlapping sheets then draws each pixel once instead
+                // of stacking their translucency into rectangular seams, while
+                // staying see-through - one layer, not none. Only the sea uses
+                // it; a canal that layers a light sheet over a dark one on
+                // purpose keeps the plain pipeline.
+                wgpu::StencilFaceState seaStencilFace{.compare = wgpu::CompareFunction::NotEqual,
+                                                      .failOp = wgpu::StencilOperation::Keep,
+                                                      .depthFailOp = wgpu::StencilOperation::Keep,
+                                                      .passOp = wgpu::StencilOperation::Replace};
+                wgpu::DepthStencilState waterSeaDepth{.format = kDepthFormat,
+                                                      .depthWriteEnabled = wgpu::OptionalBool::False,
+                                                      .depthCompare = wgpu::CompareFunction::Less,
+                                                      .stencilFront = seaStencilFace,
+                                                      .stencilBack = seaStencilFace,
+                                                      .stencilReadMask = 0xFF,
+                                                      .stencilWriteMask = 0xFF};
+                wgpu::RenderPipelineDescriptor waterSeaPipelineDescriptor = waterPipelineDescriptor;
+                waterSeaPipelineDescriptor.depthStencil = &waterSeaDepth;
+                waterSeaPipeline = device.CreateRenderPipeline(&waterSeaPipelineDescriptor);
+
                 wgpu::BindGroupEntry waterEntries[3] = {};
                 waterEntries[0].binding = 0;
                 waterEntries[0].buffer = uniformBuffer;
@@ -4314,7 +4343,10 @@ int mh::runViewer(const ViewerOptions& options, ViewerLink* link)
             wgpu::RenderPassDepthStencilAttachment mapDepthAttachment{.view = mapDepth.CreateView(),
                                                                       .depthLoadOp = wgpu::LoadOp::Clear,
                                                                       .depthStoreOp = wgpu::StoreOp::Store,
-                                                                      .depthClearValue = 1.0f};
+                                                                      .depthClearValue = 1.0f,
+                                                                      .stencilLoadOp = wgpu::LoadOp::Clear,
+                                                                      .stencilStoreOp = wgpu::StoreOp::Store,
+                                                                      .stencilClearValue = 0};
             wgpu::RenderPassDescriptor mapPassDescriptor{.colorAttachmentCount = 1,
                                                          .colorAttachments = &mapColour,
                                                          .depthStencilAttachment = &mapDepthAttachment};
@@ -9447,7 +9479,10 @@ const float kWavePeriod = [] {
         wgpu::RenderPassDepthStencilAttachment depth{.view = depthTexture.CreateView(),
                                                      .depthLoadOp = wgpu::LoadOp::Clear,
                                                      .depthStoreOp = wgpu::StoreOp::Store,
-                                                     .depthClearValue = 1.0f};
+                                                     .depthClearValue = 1.0f,
+                                                     .stencilLoadOp = wgpu::LoadOp::Clear,
+                                                     .stencilStoreOp = wgpu::StoreOp::Store,
+                                                     .stencilClearValue = 0};
         wgpu::RenderPassDescriptor passDescriptor{.colorAttachmentCount = 1,
                                                   .colorAttachments = &colour,
                                                   .depthStencilAttachment = &depth};
@@ -10413,7 +10448,20 @@ const float kWavePeriod = [] {
             // canal at the edge of the screen tinted the compass.
             if (waterIndexCount && waterPipeline)
             {
-                pass.SetPipeline(waterPipeline);
+                // The sea draws through the stencil pipeline, one layer per
+                // pixel; a river keeps the plain one so its deliberate double
+                // layer survives. Reference one: the stencil starts at zero, a
+                // pixel draws where it is not one and is set to one, so the
+                // next sheet over the same pixel is skipped.
+                if (waterIsSea && waterSeaPipeline)
+                {
+                    pass.SetPipeline(waterSeaPipeline);
+                    pass.SetStencilReference(1);
+                }
+                else
+                {
+                    pass.SetPipeline(waterPipeline);
+                }
                 pass.SetBindGroup(0, waterBindGroup);
                 pass.SetVertexBuffer(0, waterVertexBuffer);
                 pass.SetIndexBuffer(waterIndexBuffer, wgpu::IndexFormat::Uint32);
