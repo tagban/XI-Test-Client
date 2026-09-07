@@ -1,4 +1,7 @@
-# MogHouse
+# XI Test Client
+
+> Archived. Development has shifted to retail-level compatibility work
+> elsewhere; this repository is a frozen snapshot (formerly "MogHouse").
 
 A faithful attempt to port over FFXI game client to work more universally with other operating systems for private server usage. Open source so that if SE ever wants to update their client they can HAVE it..
 
