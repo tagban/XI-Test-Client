@@ -2001,7 +2001,12 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
                 const float extentZ = model->second.boundsMax[2] - model->second.boundsMin[2];
                 if (wave && extentZ > 0.1f)
                 {
-                    params.wave.reachScale = std::clamp(11.25f / extentZ, 1.0f, 3.0f);
+                    // Square-rooted and capped low: matching the reach exactly
+                    // (11.25/extent, up to ~2.8x for the short nms) stretched
+                    // the short waves so far they ran out awkwardly past the
+                    // deep water. Half the correction brings them up the beach
+                    // with the others without overshooting.
+                    params.wave.reachScale = std::clamp(std::sqrt(11.25f / extentZ), 1.0f, 1.6f);
                 }
                 if (std::getenv("MOGHOUSE_WAVE_WATCH"))
                 {
