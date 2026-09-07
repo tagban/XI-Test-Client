@@ -113,7 +113,7 @@ fn fragmentMain(in : WaterOut) -> @location(0) vec4<f32> {
     // too far down and too dark to show, not because the surface is a lid. So
     // the sea is translucent too, held opaque enough that its teal survives the
     // bright sand under it rather than washing back to grey.
-    let alpha = clamp(mix(0.50, 0.64, sea) + foam * 0.22 + fresnel * 0.1 * sea, 0.0, 0.9);
+    let alpha = clamp(mix(0.50, 0.44, sea) + foam * 0.22 + fresnel * 0.1 * sea, 0.0, 0.9);
     return vec4<f32>(colour, alpha);
 }
 )";
