@@ -2007,15 +2007,11 @@ std::optional<mh::Scene> loadZone(const char* datPath, const char* keyPath, cons
                 {
                     params.wave.extentZ = extentZ;
                 }
-                if (wave && extentZ > 0.1f)
-                {
-                    // Square-rooted and capped low: matching the reach exactly
-                    // (11.25/extent, up to ~2.8x for the short nms) stretched
-                    // the short waves so far they ran out awkwardly past the
-                    // deep water. Half the correction brings them up the beach
-                    // with the others without overshooting.
-                    params.wave.reachScale = std::clamp(std::sqrt(11.25f / extentZ), 1.0f, 1.6f);
-                }
+                // reachScale left at 1: each wave's op 0x29 curve is retail's
+                // own, tuned to land that wave on its own waterline, so boosting
+                // the short ones only made them overshoot. The band fix carries
+                // the foam to that retail reach without the strip stretching
+                // into streaks, so the honest reach is the one the DAT gives.
                 if (std::getenv("MOGHOUSE_WAVE_WATCH"))
                 {
                     std::printf("wave setup %-4s generator says %8.2f %8.2f %8.2f   model z bounds %.2f..%.2f\n",
@@ -8503,8 +8499,48 @@ const float kWavePeriod = [] {
                     const char* set = std::getenv("MOGHOUSE_WAVE_REACH");
                     return set ? std::strtof(set, nullptr) : 1.0f;
                 }();
+                // The wet sand darkens as the wave runs over it and dries
+                // slowly after, not the instant the opacity curve drops. The
+                // curve wets it up; a per-draw memory holds that darkness and
+                // lets it fall off over MOGHOUSE_WASH_DRY seconds, so the sand
+                // fades back rather than vanishing. Real-time, so it eases the
+                // curve's fall in the live client; a pinned phase just settles
+                // to the curve.
+                float washOpacity = wash ? at(draw.wave.opacity, 0.25f) : 0.0f;
+                if (wash)
+                {
+                    static std::unordered_map<size_t, float> wetness;
+                    static std::unordered_map<size_t, uint64_t> lastNs;
+                    static const float dryTime = [] {
+                        const char* set = std::getenv("MOGHOUSE_WASH_DRY");
+                        return set ? std::strtof(set, nullptr) : 3.0f;
+                    }();
+                    const uint64_t nowNs = SDL_GetTicksNS();
+                    float& wet = wetness[i];
+                    uint64_t& last = lastNs[i];
+                    const float dt = last ? std::min(static_cast<float>(nowNs - last) * 1e-9f, 0.2f) : 0.0f;
+                    last = nowNs;
+                    if (washOpacity >= wet)
+                    {
+                        wet = washOpacity;   // wets up with the wave at once
+                    }
+                    else
+                    {
+                        wet = std::max(washOpacity, wet - dt / std::max(dryTime, 0.1f));
+                    }
+                    // In retail the shoreline foam never quite leaves - it sits
+                    // there and only fades in and out. So the wash holds a floor
+                    // it never drops below, the curve breathing above it, rather
+                    // than clearing to nothing between waves. MOGHOUSE_WASH_FLOOR
+                    // sets how present it stays.
+                    static const float floor = [] {
+                        const char* set = std::getenv("MOGHOUSE_WASH_FLOOR");
+                        return set ? std::strtof(set, nullptr) : 0.22f;
+                    }();
+                    washOpacity = std::max(wet, floor);
+                }
                 const float wave[4] = {at(draw.wave.u, 0.0f), at(draw.wave.v, 0.0f),
-                                       wash ? at(draw.wave.opacity, 0.25f)
+                                       wash ? washOpacity
                                             : std::min(at(draw.wave.opacity, 0.25f) * 4.0f * gain, 1.0f),
                                        wash ? -1.0f : std::max(stretch * reach * draw.wave.reachScale, 1.0f)};
                 // MOGHOUSE_WAVE_WATCH=1 says, once, what each wave draw is and
