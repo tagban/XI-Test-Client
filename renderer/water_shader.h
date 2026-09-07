@@ -58,13 +58,6 @@ fn fragmentMain(in : WaterOut) -> @location(0) vec4<f32> {
     // Port Bastok is close to black with the dusk sky on it; a green-teal
     // river tint made it a grey-green slab.
     let sea = uniforms.fogRange.z;
-    // The sea was near-black (0.015, 0.03, 0.04), taken from Port Bastok's
-    // harbour under a dusk sky. Valkurm's shallow bay at noon is a tropical
-    // teal-green, and read as grey-black slab instead. A teal sea that keeps
-    // some depth: brighter and greener than the harbour, and still dark enough
-    // that a dusk zone's low ambient and fog carry it back toward black.
-    let seaBody = vec3<f32>(0.01, 0.30, 0.26);
-    let body = mix(vec3<f32>(0.09, 0.20, 0.17), seaBody, sea);
 
     // The ripple sheet, sampled twice drifting at different speeds and angles so
     // it does not read as one sheet sliding.
@@ -79,6 +72,15 @@ fn fragmentMain(in : WaterOut) -> @location(0) vec4<f32> {
     let a = textureSample(waterTexture, waterSampler, in.uv + vec2<f32>(time * 0.011, time * 0.007) * drift);
     let b = textureSample(waterTexture, waterSampler, in.uv * 0.63 + vec2<f32>(time * -0.008, time * 0.013) * drift);
     let foam = clamp(a.a * 0.7 + b.a * 0.55, 0.0, 1.0);
+
+    // The sea's colour is the sheet's own. umi0 measured straight from the DAT
+    // is a bright cyan (69, 217, 255), drawn translucent - the whole reason
+    // Valkurm's bay reads blue-green. The shader used to throw that away and
+    // paint a hardcoded tint, which came out the wrong hue (a dark teal-green).
+    // Read it back off the texture the sea actually ships. A river keeps a
+    // painted tint: its sheets are white foam with no colour of their own.
+    let texColour = (a.rgb + b.rgb) * 0.5;
+    let body = mix(vec3<f32>(0.09, 0.20, 0.17), texColour, sea);
 
     // Ambient is clamped: components are scaled 0..128, so it can exceed 1, and
     // letting that through once turned the river white.
